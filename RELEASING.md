@@ -16,6 +16,20 @@ git push origin v0.1.0
 
 The workflow compiles binaries for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 and creates a GitHub Release automatically.
 
+## Commit naming
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add background task queue
+fix: agent not resuming after rewind
+refactor: rename ctm to mdm
+docs: update README installation
+chore: add release workflow
+```
+
+Prefixes: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `ci`.
+
 ## Version numbering
 
 Use semver: `vMAJOR.MINOR.PATCH`
