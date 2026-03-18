@@ -1,6 +1,6 @@
 package main
 
-import "github.com/exponentia/ctm/cmd"
+import "github.com/Titovilal/middleman/cmd"
 
 func main() {
 	cmd.Execute()

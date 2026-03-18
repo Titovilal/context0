@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/exponentia/ctm/agent"
+	"github.com/Titovilal/middleman/agent"
 	"github.com/spf13/cobra"
 )
 

@@ -41,7 +41,7 @@ Adding a new connector only requires implementing the `AgentConnector` interface
 Requires Go 1.23+.
 
 ```bash
-git clone https://github.com/exponentia/mdm
+git clone https://github.com/Titovilal/middleman
 cd mdm
 go build -o mdm .
 ```

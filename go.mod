@@ -1,4 +1,4 @@
-module github.com/exponentia/ctm
+module github.com/Titovilal/middleman
 
 go 1.23.5
 

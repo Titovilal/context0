@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/exponentia/ctm/config"
-	"github.com/exponentia/ctm/connector"
-	claudeconn "github.com/exponentia/ctm/connector/claude"
-	geminiconn "github.com/exponentia/ctm/connector/gemini"
-	opencodeconn "github.com/exponentia/ctm/connector/opencode"
-	"github.com/exponentia/ctm/orchestrator"
-	"github.com/exponentia/ctm/store"
+	"github.com/Titovilal/middleman/config"
+	"github.com/Titovilal/middleman/connector"
+	claudeconn "github.com/Titovilal/middleman/connector/claude"
+	geminiconn "github.com/Titovilal/middleman/connector/gemini"
+	opencodeconn "github.com/Titovilal/middleman/connector/opencode"
+	"github.com/Titovilal/middleman/orchestrator"
+	"github.com/Titovilal/middleman/store"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +39,7 @@ AI agent orchestrator CLI.
   It will print the full instructions you need to act as the Middleman.
 
   If you are a human, see the docs:
-    https://github.com/exponentia/mdm
+    https://github.com/Titovilal/middleman
 
   Quick start:
     mdm spawn agent-auth --briefing "You handle authentication"

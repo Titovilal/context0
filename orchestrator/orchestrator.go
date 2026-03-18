@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/exponentia/ctm/agent"
-	"github.com/exponentia/ctm/connector"
-	"github.com/exponentia/ctm/store"
+	"github.com/Titovilal/middleman/agent"
+	"github.com/Titovilal/middleman/connector"
+	"github.com/Titovilal/middleman/store"
 	"github.com/google/uuid"
 )
 

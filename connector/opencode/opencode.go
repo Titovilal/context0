@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/exponentia/ctm/connector"
+	"github.com/Titovilal/middleman/connector"
 )
 
 const Name = "opencode"

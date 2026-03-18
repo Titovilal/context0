@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/exponentia/ctm/agent"
+	"github.com/Titovilal/middleman/agent"
 )
 
 const registryFileName = "registry.json"
