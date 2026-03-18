@@ -38,11 +38,19 @@ Adding a new connector only requires implementing the `AgentConnector` interface
 
 ## Installation
 
+### Linux / macOS
+
 ```bash
 curl -sL https://raw.githubusercontent.com/Titovilal/middleman/main/install.sh | sh
 ```
 
-Or with Go:
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/Titovilal/middleman/main/install.ps1 | iex
+```
+
+### From source
 
 ```bash
 go install github.com/Titovilal/middleman@latest
