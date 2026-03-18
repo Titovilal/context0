@@ -38,15 +38,16 @@ Adding a new connector only requires implementing the `AgentConnector` interface
 
 ## Installation
 
-Requires Go 1.23+.
-
 ```bash
-git clone https://github.com/Titovilal/middleman
-cd mdm
-go build -o mdm .
+curl -sL https://raw.githubusercontent.com/Titovilal/middleman/main/install.sh | sh
 ```
 
-Add to your PATH or move the binary to `/usr/local/bin`.
+Or with Go:
+
+```bash
+go install github.com/Titovilal/middleman@latest
+mv $(go env GOPATH)/bin/middleman $(go env GOPATH)/bin/mdm
+```
 
 ## Usage
 
