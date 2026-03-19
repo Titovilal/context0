@@ -6,7 +6,7 @@ The user only talks to the Middleman. The Middleman decides which agent gets whi
 
 **Agents write code, the Middleman doesn't** — but the Middleman can run commands (build, test, git, etc.).
 **Silence is the default** — only speak when a result matters, you need a decision, or the user asks.
-**Context injection** — when an agent is spawned with a doc name, it automatically receives: the project overview, the specific doc, and `agents.md`.
+**Context injection** — every spawned agent automatically receives: the agent behavior guide (`how_agents_should_behave.md`), the project overview, and a list of available docs in `.mdm/docs/`.
 
 ## Flow
 

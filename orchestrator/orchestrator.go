@@ -121,40 +121,37 @@ func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName, t
 // If the agent is idle, the task is set to "pending" and a background process should be launched.
 // If the agent is already working, the task is "queued" and will run automatically when the current task finishes.
 func (o *Orchestrator) DelegateAsync(ctx context.Context, agentID, prompt string, timeout time.Duration) (*agent.TaskRecord, error) {
-	_, a, err := o.loadAgentAndConnector(agentID)
-	if err != nil {
-		return nil, err
-	}
-
 	if timeout == 0 {
 		timeout = 5 * time.Minute
-	}
-
-	// If agent is busy, queue the task instead of running immediately.
-	queued := a.Status == agent.StatusWorking
-	if queued && len(a.QueuedTasks()) >= 2 {
-		return nil, fmt.Errorf("agent %s already has 2 queued tasks, wait or use another agent", agentID)
-	}
-	status := agent.TaskPending
-	if queued {
-		status = agent.TaskQueued
 	}
 
 	task := &agent.TaskRecord{
 		TaskID:    uuid.NewString(),
 		Prompt:    prompt,
-		Status:    status,
 		StartedAt: time.Now(),
 	}
 
-	if !queued {
-		a.Status = agent.StatusWorking
-	}
-	a.LastActiveAt = time.Now()
-	a.TaskLog = append(a.TaskLog, *task)
-
 	if err := o.store.WithLock(func(reg *agent.Registry) error {
-		return reg.Update(a)
+		a, err := reg.Get(agentID)
+		if err != nil {
+			return err
+		}
+
+		// If agent is busy, queue the task instead of running immediately.
+		queued := a.Status == agent.StatusWorking
+		if queued && len(a.QueuedTasks()) >= 2 {
+			return fmt.Errorf("agent %s already has 2 queued tasks, wait or use another agent", agentID)
+		}
+
+		if queued {
+			task.Status = agent.TaskQueued
+		} else {
+			task.Status = agent.TaskPending
+			a.Status = agent.StatusWorking
+		}
+		a.LastActiveAt = time.Now()
+		a.TaskLog = append(a.TaskLog, *task)
+		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("save agent after delegate: %w", err)
 	}
@@ -171,118 +168,156 @@ func (o *Orchestrator) RunTask(ctx context.Context, agentID, taskID string, time
 
 	// Process queued tasks.
 	for {
-		_, a, err := o.loadAgentAndConnector(agentID)
-		if err != nil {
-			return err
-		}
-
-		queued := a.QueuedTasks()
-		if len(queued) == 0 {
-			return nil
-		}
-
-		// Promote first queued task to pending.
-		next := a.TaskByID(queued[0].TaskID)
-		next.Status = agent.TaskPending
-		next.StartedAt = time.Now()
-		a.Status = agent.StatusWorking
+		var nextTaskID string
 		if err := o.store.WithLock(func(reg *agent.Registry) error {
-			return reg.Update(a)
+			a, err := reg.Get(agentID)
+			if err != nil {
+				return err
+			}
+			queued := a.QueuedTasks()
+			if len(queued) == 0 {
+				return nil
+			}
+			// Promote first queued task to pending.
+			next := a.TaskByID(queued[0].TaskID)
+			next.Status = agent.TaskPending
+			next.StartedAt = time.Now()
+			a.Status = agent.StatusWorking
+			nextTaskID = next.TaskID
+			return nil
 		}); err != nil {
 			return err
 		}
 
-		if err := o.runSingleTask(ctx, agentID, next.TaskID, timeout); err != nil {
+		if nextTaskID == "" {
+			return nil
+		}
+
+		if err := o.runSingleTask(ctx, agentID, nextTaskID, timeout); err != nil {
 			return err
 		}
 	}
 }
 
 func (o *Orchestrator) runSingleTask(ctx context.Context, agentID, taskID string, timeout time.Duration) error {
-	conn, a, err := o.loadAgentAndConnector(agentID)
+	// Read agent state for the connector call (read-only snapshot).
+	conn, snap, err := o.loadAgentAndConnector(agentID)
 	if err != nil {
 		return err
 	}
 
-	task := a.TaskByID(taskID)
+	task := snap.TaskByID(taskID)
 	if task == nil {
 		return fmt.Errorf("task %s not found on agent %s", taskID, agentID)
 	}
 
-	// Checkpoint before running.
-	label := fmt.Sprintf("pre-task-%s", time.Now().Format("20060102-150405"))
-	if err := o.appendCheckpoint(ctx, a, conn, label); err != nil {
-		fmt.Printf("warning: could not create pre-task checkpoint: %v\n", err)
+	// Checkpoint before running (mutates snap in memory only for the checkpoint append).
+	preLabel := fmt.Sprintf("pre-task-%s", time.Now().Format("20060102-150405"))
+	preCP := o.buildCheckpoint(ctx, snap, conn, preLabel)
+
+	// Save pre-task checkpoint atomically.
+	if preCP != nil {
+		if err := o.store.WithLock(func(reg *agent.Registry) error {
+			a, err := reg.Get(agentID)
+			if err != nil {
+				return err
+			}
+			a.Checkpoints = append(a.Checkpoints, *preCP)
+			return nil
+		}); err != nil {
+			fmt.Printf("warning: could not save pre-task checkpoint: %v\n", err)
+		}
 	}
 
 	if timeout == 0 {
 		timeout = 5 * time.Minute
 	}
 	req := connector.RunRequest{
-		SessionID: a.SessionID,
+		SessionID: snap.SessionID,
 		Prompt:    task.Prompt,
-		WorkDir:   a.WorkDir,
+		WorkDir:   snap.WorkDir,
 		Timeout:   timeout,
 	}
 
+	// Execute the AI CLI call (long-running, outside any lock).
 	result, runErr := conn.Run(ctx, req)
 	now := time.Now()
 
+	// Build post-task checkpoint before saving (needs the possibly-new session).
+	sessionID := snap.SessionID
 	if result.SessionID != "" {
-		a.SessionID = result.SessionID
+		sessionID = result.SessionID
 	}
-
-	task.Response = result.FinalText
-	task.CompletedAt = now
-	task.IsError = result.IsError || runErr != nil
-	if runErr != nil {
-		task.ErrorDetail = runErr.Error()
-	} else {
-		task.ErrorDetail = result.ErrorDetail
-	}
-
-	if task.IsError {
-		task.Status = agent.TaskFailed
-	} else {
-		task.Status = agent.TaskCompleted
-	}
-
-	a.Status = agent.StatusIdle
-	a.LastActiveAt = now
-
-	// Post-task checkpoint.
+	snapForPost := &agent.Agent{SessionID: sessionID, ConnectorName: snap.ConnectorName}
 	postLabel := fmt.Sprintf("post-task-%s", now.Format("20060102-150405"))
-	if err := o.appendCheckpoint(ctx, a, conn, postLabel); err != nil {
-		fmt.Printf("warning: could not create post-task checkpoint: %v\n", err)
-	}
+	postCP := o.buildCheckpoint(ctx, snapForPost, conn, postLabel)
 
+	// Apply all mutations atomically on the fresh registry state.
 	return o.store.WithLock(func(reg *agent.Registry) error {
-		return reg.Update(a)
+		a, err := reg.Get(agentID)
+		if err != nil {
+			return err
+		}
+
+		t := a.TaskByID(taskID)
+		if t == nil {
+			return fmt.Errorf("task %s not found on agent %s", taskID, agentID)
+		}
+
+		if result.SessionID != "" {
+			a.SessionID = result.SessionID
+		}
+
+		t.Response = result.FinalText
+		t.CompletedAt = now
+		t.IsError = result.IsError || runErr != nil
+		if runErr != nil {
+			t.ErrorDetail = runErr.Error()
+		} else {
+			t.ErrorDetail = result.ErrorDetail
+		}
+
+		if t.IsError {
+			t.Status = agent.TaskFailed
+		} else {
+			t.Status = agent.TaskCompleted
+		}
+
+		a.Status = agent.StatusIdle
+		a.LastActiveAt = now
+
+		if postCP != nil {
+			a.Checkpoints = append(a.Checkpoints, *postCP)
+		}
+
+		return nil
 	})
 }
 
 // Rewind forks an agent back to the given checkpoint (or latest if empty).
 func (o *Orchestrator) Rewind(ctx context.Context, agentID, checkpointLabel string) (*agent.Agent, error) {
-	conn, a, err := o.loadAgentAndConnector(agentID)
+	// Read snapshot to get checkpoint data and connector for the fork call.
+	conn, snap, err := o.loadAgentAndConnector(agentID)
 	if err != nil {
 		return nil, err
 	}
 
 	var cp *agent.CheckpointRecord
 	if checkpointLabel == "" {
-		cp = a.LatestCheckpoint()
+		cp = snap.LatestCheckpoint()
 	} else {
-		cp = a.CheckpointByLabel(checkpointLabel)
+		cp = snap.CheckpointByLabel(checkpointLabel)
 	}
 	if cp == nil {
 		return nil, fmt.Errorf("no checkpoint found for agent %s (label: %q)", agentID, checkpointLabel)
 	}
 
 	if !conn.SupportsFork() {
-		fmt.Printf("warning: connector %q does not support true fork — rewind will modify the original session\n", a.ConnectorName)
+		fmt.Printf("warning: connector %q does not support true fork — rewind will modify the original session\n", snap.ConnectorName)
 	}
 
-	newSessionID, err := conn.Fork(ctx, a.SessionID, connector.Checkpoint{
+	// Fork happens outside lock (external process call).
+	newSessionID, err := conn.Fork(ctx, snap.SessionID, connector.Checkpoint{
 		Label:     cp.Label,
 		TurnIndex: cp.TurnIndex,
 		NativeRef: cp.NativeRef,
@@ -292,34 +327,44 @@ func (o *Orchestrator) Rewind(ctx context.Context, agentID, checkpointLabel stri
 		return nil, fmt.Errorf("fork failed: %w", err)
 	}
 
-	// Truncate checkpoints to the rewound point.
-	newCheckpoints := make([]agent.CheckpointRecord, 0)
-	for _, c := range a.Checkpoints {
-		newCheckpoints = append(newCheckpoints, c)
-		if c.Label == cp.Label {
-			break
-		}
-	}
-
-	a.SessionID = newSessionID
-	a.Checkpoints = newCheckpoints
-	a.LastActiveAt = time.Now()
-	a.TaskLog = append(a.TaskLog, agent.TaskRecord{
-		TaskID:      uuid.NewString(),
-		Prompt:      fmt.Sprintf("__rewind_to:%s__", cp.Label),
-		Response:    fmt.Sprintf("rewound to checkpoint %q (turn %d)", cp.Label, cp.TurnIndex),
-		Status:      agent.TaskCompleted,
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	})
-
+	// Apply mutations atomically on the fresh registry state.
+	var result *agent.Agent
+	cpLabel := cp.Label
+	cpTurnIndex := cp.TurnIndex
 	if err := o.store.WithLock(func(reg *agent.Registry) error {
-		return reg.Update(a)
+		a, err := reg.Get(agentID)
+		if err != nil {
+			return err
+		}
+
+		// Truncate checkpoints to the rewound point.
+		newCheckpoints := make([]agent.CheckpointRecord, 0)
+		for _, c := range a.Checkpoints {
+			newCheckpoints = append(newCheckpoints, c)
+			if c.Label == cpLabel {
+				break
+			}
+		}
+
+		a.SessionID = newSessionID
+		a.Checkpoints = newCheckpoints
+		a.LastActiveAt = time.Now()
+		a.TaskLog = append(a.TaskLog, agent.TaskRecord{
+			TaskID:      uuid.NewString(),
+			Prompt:      fmt.Sprintf("__rewind_to:%s__", cpLabel),
+			Response:    fmt.Sprintf("rewound to checkpoint %q (turn %d)", cpLabel, cpTurnIndex),
+			Status:      agent.TaskCompleted,
+			StartedAt:   time.Now(),
+			CompletedAt: time.Now(),
+		})
+
+		result = a
+		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("save agent after rewind: %w", err)
 	}
 
-	return a, nil
+	return result, nil
 }
 
 // Inspect returns a copy of the agent record.
@@ -407,7 +452,9 @@ func (o *Orchestrator) loadAgentAndConnector(agentID string) (connector.AgentCon
 	return conn, a, nil
 }
 
-func (o *Orchestrator) appendCheckpoint(ctx context.Context, a *agent.Agent, conn connector.AgentConnector, label string) error {
+// buildCheckpoint creates a checkpoint record without mutating the agent.
+// Returns nil if the checkpoint could not be built (non-fatal).
+func (o *Orchestrator) buildCheckpoint(ctx context.Context, a *agent.Agent, conn connector.AgentConnector, label string) *agent.CheckpointRecord {
 	// Claude writes the session JSONL asynchronously after the CLI exits.
 	// Retry a few times with short sleeps to let the file appear.
 	var turnCount int
@@ -420,7 +467,8 @@ func (o *Orchestrator) appendCheckpoint(ctx context.Context, a *agent.Agent, con
 		time.Sleep(time.Duration(i+1) * 300 * time.Millisecond)
 	}
 	if err != nil {
-		return err
+		fmt.Printf("warning: could not create checkpoint %q: %v\n", label, err)
+		return nil
 	}
 
 	// For Claude, get the last assistant UUID as NativeRef.
@@ -429,11 +477,21 @@ func (o *Orchestrator) appendCheckpoint(ctx context.Context, a *agent.Agent, con
 		nativeRef, _ = cc.LastAssistantUUID(a.SessionID)
 	}
 
-	a.Checkpoints = append(a.Checkpoints, agent.CheckpointRecord{
+	return &agent.CheckpointRecord{
 		Label:     label,
 		TurnIndex: turnCount,
 		NativeRef: nativeRef,
 		CreatedAt: time.Now(),
-	})
+	}
+}
+
+// appendCheckpoint builds and appends a checkpoint to the agent in memory.
+// Used during Spawn where the agent hasn't been persisted yet.
+func (o *Orchestrator) appendCheckpoint(ctx context.Context, a *agent.Agent, conn connector.AgentConnector, label string) error {
+	cp := o.buildCheckpoint(ctx, a, conn, label)
+	if cp == nil {
+		return fmt.Errorf("could not build checkpoint %q", label)
+	}
+	a.Checkpoints = append(a.Checkpoints, *cp)
 	return nil
 }

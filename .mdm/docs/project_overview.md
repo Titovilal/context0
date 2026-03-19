@@ -15,7 +15,7 @@ MDM (The Middleman) is a CLI tool that orchestrates multiple AI coding agents (C
 ## Flow
 1. User (or a Middleman agent) runs `mdm spawn <name> --briefing '...' 'task'` to create an agent and delegate a task in one call; if the agent already exists, the task is queued
 2. Tasks run asynchronously in background processes; results are retrieved with `mdm result`
-3. Sessions can be rewound to any checkpoint via `mdm rewind`, which forks the AI CLI session at the checkpoint's native reference point
+3. Sessions can be rewound to any checkpoint via `mdm rewind`, which forks the AI CLI session at the checkpoint's native reference point (note: only Claude supports true session forking; Gemini and OpenCode have degraded rewind with limitations)
 
 ## Documentation available in `.mdm/docs/`
 - **`agent_registry.md`** — Agent domain types and in-memory registry

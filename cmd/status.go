@@ -18,7 +18,7 @@ var statusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var statuses []agent.Status
 		if !statusFlags.all {
-			statuses = []agent.Status{agent.StatusActive, agent.StatusIdle, agent.StatusWorking}
+			statuses = []agent.Status{agent.StatusIdle, agent.StatusWorking}
 		}
 
 		agents, err := orch.ListAgents(context.Background(), statuses...)
