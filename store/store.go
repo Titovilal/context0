@@ -25,13 +25,93 @@ type Store struct {
 
 // New creates a Store pointing to dir/.mdm/registry.json.
 // The directory is created if it doesn't exist.
+// It also initializes the __docs__/ folder with default files if they don't exist.
 func New(dir string) (*Store, error) {
 	ctmDir := filepath.Join(dir, ".mdm")
 	if err := os.MkdirAll(ctmDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create .mdm dir: %w", err)
 	}
+
+	// Initialize __docs__/ folder with default files.
+	initDocs(dir)
+
+	// Copy agents.md to project root if it doesn't exist.
+	initAgentsMD(dir)
+
 	return &Store{path: filepath.Join(ctmDir, registryFileName)}, nil
 }
+
+// initDocs creates the __docs__/ folder with the default template if it doesn't exist.
+func initDocs(dir string) {
+	docsDir := filepath.Join(dir, "__docs__")
+	_ = os.MkdirAll(docsDir, 0o755)
+
+	templatePath := filepath.Join(docsDir, "_doc_template.md")
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		_ = os.WriteFile(templatePath, []byte(docTemplate), 0o644)
+	}
+}
+
+// initAgentsMD creates the agents.md file in the project root if it doesn't exist.
+func initAgentsMD(dir string) {
+	agentsPath := filepath.Join(dir, "agents.md")
+	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
+		_ = os.WriteFile(agentsPath, []byte(agentsMDContent), 0o644)
+	}
+}
+
+const docTemplate = `# Guide to Creating Feature Documentation
+
+## Objective
+Create simple, high-level documentation that explains what a feature does and how components work together.
+
+## Template
+
+` + "```markdown" + `
+# [Feature Name]
+
+## What It Does
+[Brief explanation in 1-3 sentences]
+
+## Main Files
+- ` + "`file1.py`" + ` - [role]
+- ` + "`file2.py`" + ` - [role]
+
+## Flow
+1. [What starts the process]
+2. [What happens in the middle]
+3. [What's the result]
+` + "```" + `
+
+## Best Practices
+
+### Do
+- Keep it short and simple
+- Focus on the big picture
+- Use plain language
+
+### Avoid
+- Code snippets
+- Implementation details
+- Complex technical jargon
+
+## File Naming
+
+` + "`[some_name].md`" + `
+
+Example:
+- ` + "`project_overview.md`" + `
+`
+
+const agentsMDContent = `# Mandatory steps to update the code base
+
+1. List ` + "`__docs__/`" + ` folder.
+2. Read ` + "`__docs__/doc_project_overview.md`" + `.
+3. Read the next specific document(s) if needed.
+4. Make the necessary changes.
+5. Update the affected document(s).
+6. For more follow-up changes, repeat from step 3.
+`
 
 // NewGlobal creates a Store in ~/.mdm/registry.json.
 func NewGlobal() (*Store, error) {

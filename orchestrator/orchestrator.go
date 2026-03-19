@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Titovilal/middleman/agent"
@@ -23,16 +25,20 @@ func New(s *store.Store, connectors *connector.ConnectorRegistry, workDir string
 }
 
 // Spawn creates a new agent with the given briefing and runs an initial probe.
+// The agents.md file from the working directory is automatically prepended to the briefing.
 func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName string) (*agent.Agent, error) {
 	conn, ok := o.connectors.Get(connectorName)
 	if !ok {
 		return nil, fmt.Errorf("connector %q not registered", connectorName)
 	}
 
+	// Prepend agents.md content to briefing so every agent reads it.
+	fullBriefing := o.buildBriefing(briefing)
+
 	req := connector.RunRequest{
 		Prompt:             "ok",
 		WorkDir:            o.workDir,
-		SystemPromptAppend: briefing,
+		SystemPromptAppend: fullBriefing,
 		Timeout:            2 * time.Minute,
 	}
 
@@ -324,6 +330,22 @@ func (o *Orchestrator) UpdateContext(ctx context.Context, agentID, knownContext 
 }
 
 // --- helpers ---
+
+// buildBriefing prepends the agents.md content to the user-provided briefing.
+func (o *Orchestrator) buildBriefing(briefing string) string {
+	agentsPath := filepath.Join(o.workDir, "agents.md")
+	data, err := os.ReadFile(agentsPath)
+	if err != nil {
+		// No agents.md found, just use the original briefing.
+		return briefing
+	}
+
+	agentsContent := string(data)
+	if briefing == "" {
+		return agentsContent
+	}
+	return agentsContent + "\n\n---\n\n" + briefing
+}
 
 func (o *Orchestrator) loadAgentAndConnector(agentID string) (connector.AgentConnector, *agent.Agent, error) {
 	reg, err := o.store.Load()
