@@ -11,7 +11,7 @@ var runTaskFlags struct {
 	timeout time.Duration
 }
 
-// _run-task is an internal command launched by 'delegate' as a background process.
+// _run-task is an internal command launched by 'spawn' as a background process.
 // It is not shown in help.
 var runTaskCmd = &cobra.Command{
 	Use:    "_run-task <agent_id> <task_id>",

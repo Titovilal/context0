@@ -25,11 +25,30 @@ func New(s *store.Store, connectors *connector.ConnectorRegistry, workDir string
 }
 
 // Spawn creates a new agent with the given briefing and runs an initial probe.
+// If the agent already exists, it delegates the task to the existing agent instead.
 // The agents.md file from the working directory is automatically prepended to the briefing.
-func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName string) (*agent.Agent, error) {
+func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName, task string, timeout time.Duration) (*agent.Agent, *agent.TaskRecord, error) {
+	// If agent already exists, delegate the task to it.
+	reg, err := o.store.Load()
+	if err != nil {
+		return nil, nil, err
+	}
+	if existing, getErr := reg.Get(id); getErr == nil {
+		if task == "" {
+			return existing, nil, nil
+		}
+		taskRec, err := o.DelegateAsync(ctx, id, task, timeout)
+		if err != nil {
+			return nil, nil, err
+		}
+		// Reload agent after delegate updated it.
+		_, a, _ := o.loadAgentAndConnector(id)
+		return a, taskRec, nil
+	}
+
 	conn, ok := o.connectors.Get(connectorName)
 	if !ok {
-		return nil, fmt.Errorf("connector %q not registered", connectorName)
+		return nil, nil, fmt.Errorf("connector %q not registered", connectorName)
 	}
 
 	// Prepend agents.md content to briefing so every agent reads it.
@@ -45,7 +64,7 @@ func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName st
 	startedAt := time.Now()
 	result, err := conn.Run(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("spawn run failed: %w", err)
+		return nil, nil, fmt.Errorf("spawn run failed: %w", err)
 	}
 
 	now := time.Now()
@@ -80,10 +99,21 @@ func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName st
 	if err := o.store.WithLock(func(reg *agent.Registry) error {
 		return reg.Add(a)
 	}); err != nil {
-		return nil, fmt.Errorf("save agent: %w", err)
+		return nil, nil, fmt.Errorf("save agent: %w", err)
 	}
 
-	return a, nil
+	// If a task was provided, delegate it immediately.
+	if task != "" {
+		taskRec, err := o.DelegateAsync(ctx, id, task, timeout)
+		if err != nil {
+			return a, nil, fmt.Errorf("agent spawned but delegate failed: %w", err)
+		}
+		// Reload agent after delegate updated it.
+		_, a, _ = o.loadAgentAndConnector(id)
+		return a, taskRec, nil
+	}
+
+	return a, nil, nil
 }
 
 // DelegateAsync registers a task for an agent and returns the task record.
@@ -296,15 +326,10 @@ func (o *Orchestrator) Inspect(ctx context.Context, agentID string) (*agent.Agen
 	return reg.Get(agentID)
 }
 
-// Discard marks an agent as discarded.
-func (o *Orchestrator) Discard(ctx context.Context, agentID string) error {
+// Remove deletes an agent from the registry entirely.
+func (o *Orchestrator) Remove(ctx context.Context, agentID string) error {
 	return o.store.WithLock(func(reg *agent.Registry) error {
-		a, err := reg.Get(agentID)
-		if err != nil {
-			return err
-		}
-		a.Status = agent.StatusDiscarded
-		return reg.Update(a)
+		return reg.Delete(agentID)
 	})
 }
 
@@ -315,18 +340,6 @@ func (o *Orchestrator) ListAgents(ctx context.Context, statuses ...agent.Status)
 		return nil, err
 	}
 	return reg.List(statuses...), nil
-}
-
-// UpdateContext updates the KnownContext field of an agent (Middleman's notes).
-func (o *Orchestrator) UpdateContext(ctx context.Context, agentID, knownContext string) error {
-	return o.store.WithLock(func(reg *agent.Registry) error {
-		a, err := reg.Get(agentID)
-		if err != nil {
-			return err
-		}
-		a.KnownContext = knownContext
-		return reg.Update(a)
-	})
 }
 
 // --- helpers ---

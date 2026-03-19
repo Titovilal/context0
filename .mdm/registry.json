@@ -414,6 +414,371 @@
       ],
       "created_at": "2026-03-19T02:21:23.345585354+01:00",
       "last_active_at": "2026-03-19T02:22:41.717907342+01:00"
+    },
+    {
+      "id": "updater",
+      "connector_name": "claude",
+      "session_id": "9216c1f5-4e8f-4a85-be69-0f655aab5cdc",
+      "work_dir": "/home/exponentia/Modelos_Salva/claude-the-middleman",
+      "status": "idle",
+      "briefing": "You are fixing the Windows update mechanism in MDM. The 'mdm update' command fails on Windows with 'Access is denied' when trying to rename the temp file over the running exe. Windows locks running executables. The standard fix is: 1) rename the current exe to a temp name (e.g., mdm.exe.old) — Windows allows renaming a running exe, just not overwriting it. 2) rename/move the new binary to the target path. 3) optionally clean up the old file on next run. Look at the update logic and implement this fix.",
+      "checkpoints": [
+        {
+          "label": "spawn",
+          "turn_index": 18,
+          "native_ref": "86ef2096-d94c-4422-b037-6d1b3c789f99",
+          "created_at": "2026-03-19T14:27:45.48786329+01:00"
+        },
+        {
+          "label": "pre-task-20260319-142831",
+          "turn_index": 18,
+          "native_ref": "86ef2096-d94c-4422-b037-6d1b3c789f99",
+          "created_at": "2026-03-19T14:28:31.965922737+01:00"
+        },
+        {
+          "label": "post-task-20260319-142843",
+          "turn_index": 21,
+          "native_ref": "aab8088f-363e-4e7b-b62f-02308eccd4c6",
+          "created_at": "2026-03-19T14:28:43.555817722+01:00"
+        },
+        {
+          "label": "pre-task-20260319-143104",
+          "turn_index": 21,
+          "native_ref": "aab8088f-363e-4e7b-b62f-02308eccd4c6",
+          "created_at": "2026-03-19T14:31:04.1043429+01:00"
+        },
+        {
+          "label": "post-task-20260319-143230",
+          "turn_index": 35,
+          "native_ref": "e3a6b39f-2451-4ce4-b3f4-b0dd5db9ea96",
+          "created_at": "2026-03-19T14:32:30.26052036+01:00"
+        }
+      ],
+      "task_log": [
+        {
+          "task_id": "69fd001e-237c-455d-800f-edfcc514516c",
+          "prompt": "__spawn__",
+          "response": "The doc doesn't mention the update command specifically, and the change is internal to `cmd/update.go` which isn't listed. No doc update needed — the overview accurately describes the project structure at the right level of abstraction.\n\nHere's what was done:\n\n**Problem:** On Windows, `mdm update` failed with \"Access is denied\" because Windows locks running executables — you can't overwrite or delete them.\n\n**Fix:** Added `installBinaryWindows()` at `cmd/update.go:199` that implements the standard Windows self-update pattern:\n\n1. **Clean up** any leftover `mdm.exe.old` from a previous update\n2. **Rename** the running `mdm.exe` → `mdm.exe.old` (Windows allows renaming a running exe, just not overwriting/deleting it)\n3. **Move** the new binary to the now-free target path\n4. If the move fails, **restore** the old binary as a safety measure\n\nThe `.old` file gets cleaned up automatically on the next update.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:26:41.846624646+01:00",
+          "completed_at": "2026-03-19T14:27:45.487031132+01:00"
+        },
+        {
+          "task_id": "5ad38e87-caca-4060-937d-616403f84f43",
+          "prompt": "Fix the Windows update mechanism in MDM. The 'mdm update' command fails on Windows with 'Access is denied' when trying to rename the temp file over the running exe. Windows locks running executables. The standard fix is: 1) rename the current exe to a temp name (e.g., mdm.exe.old) — Windows allows renaming a running exe, just not overwriting it. 2) rename/move the new binary to the target path. 3) optionally clean up the old file on next run. Find the update logic and implement this fix.",
+          "response": "The fix is already in place with the exact approach you described:\n\n1. **Line 203**: Cleans up leftover `.old` from previous updates\n2. **Lines 208-212**: Renames the running `mdm.exe` → `mdm.exe.old` (allowed by Windows)\n3. **Lines 215-222**: Moves the new binary into the now-free target path, with rollback on failure\n\nThe code compiles cleanly. No additional changes needed.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:28:31.961595398+01:00",
+          "completed_at": "2026-03-19T14:28:43.554525657+01:00"
+        },
+        {
+          "task_id": "f4d8e21a-8dd2-44c1-927c-f2c11660529c",
+          "prompt": "The previous analysis was wrong. The user JUST got this error on Windows: 'install failed: rename C:\\Users\\Salva\\AppData\\Local\\Temp\\mdm-update C:\\Users\\Salva\\AppData\\Local\\mdm\\mdm.exe: Access is denied.' So the fix is NOT working. Please look at the actual update code more carefully and find why it's still failing. The rename-old-then-move-new approach needs to actually be implemented or fixed. Show me the relevant code and what you changed.",
+          "response": "Here's the summary of what was wrong and what the fix does:\n\n**Root cause**: The committed `installBinary` (commit 9b7b1bf) does `os.Rename(tmp, target)` directly. On Windows, when `target` is the running `mdm.exe`, this fails with \"Access is denied\" because Windows locks running executables against overwriting. The `copyFile` fallback also fails because `os.Create(target)` can't overwrite the locked exe either.\n\n**The fix** (already in working tree, needs to be committed + released):\n\n1. `installBinary` now dispatches to `installBinaryWindows` on Windows (line 175-177)\n2. `installBinaryWindows` does the standard Windows self-update dance:\n   - **Clean up** leftover `mdm.exe.old` from any previous update\n   - **Rename** the running `mdm.exe` → `mdm.exe.old` (Windows allows renaming a locked exe, just not overwriting/deleting it)\n   - **Move** the new binary to the now-free `mdm.exe` path, with `copyFile` fallback for cross-volume cases\n   - **Rollback** if the copy fails — restores the `.old` back to the original name\n\nThe fix was already applied from my previous turn. It just needs to be committed, built, and released so the user's Windows binary actually contains it.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:31:04.099460806+01:00",
+          "completed_at": "2026-03-19T14:32:30.253841523+01:00"
+        }
+      ],
+      "created_at": "2026-03-19T14:27:45.487031132+01:00",
+      "last_active_at": "2026-03-19T14:32:30.253841523+01:00"
+    },
+    {
+      "id": "launcher",
+      "connector_name": "claude",
+      "session_id": "672d111e-0e72-4fc3-819a-552f46adb82b",
+      "work_dir": "/home/exponentia/Modelos_Salva/claude-the-middleman",
+      "status": "idle",
+      "briefing": "You are adding a new 'mdm launch' command. When the user runs 'mdm launch claude' (or any connector name), it should launch that AI CLI tool and automatically inject the middleman prompt so the agent acts as the orchestrator. Essentially it should: 1) get the agent-prompt (same as mdm agent-prompt), 2) launch the specified CLI (e.g. claude) with that prompt pre-injected so the user gets an interactive session where the AI is already acting as the Middleman. Look at how the existing connectors work and how agent-prompt is generated to implement this.",
+      "checkpoints": [
+        {
+          "label": "post-task-20260319-143231",
+          "turn_index": 28,
+          "native_ref": "5f0f825a-4d4b-4dc0-95ae-bfe49e0441af",
+          "created_at": "2026-03-19T14:32:31.285295757+01:00"
+        }
+      ],
+      "task_log": [
+        {
+          "task_id": "9d6a04e8-9fe9-412e-8441-3d047e344731",
+          "prompt": "__spawn__",
+          "response": "",
+          "is_error": true,
+          "error_detail": "signal: killed",
+          "status": "completed",
+          "started_at": "2026-03-19T14:28:40.57248379+01:00",
+          "completed_at": "2026-03-19T14:30:40.682893193+01:00"
+        },
+        {
+          "task_id": "ef3aeba5-99b1-4859-a051-fa07f65cd223",
+          "prompt": "Add a new 'mdm launch \u003cconnector\u003e' command. When run (e.g. 'mdm launch claude'), it should: 1) Generate the middleman agent-prompt (same output as 'mdm agent-prompt'). 2) Launch the specified AI CLI interactively with that prompt pre-loaded so the AI immediately acts as the Middleman orchestrator. For Claude specifically, 'claude --system-prompt ...' or 'claude -p ...' or similar. Check how each connector's CLI accepts system prompts or initial messages. The user should end up in an interactive session with the AI already knowing it's the Middleman. Look at cmd/agent_prompt.go for the prompt generation and connector/ for how CLIs are invoked.",
+          "response": "The `mdm launch` command is implemented. Here's what it does:\n\n**How it works:**\n1. Generates the Middleman agent prompt (same as `mdm agent-prompt`) with the resolved mdm binary path and working directory\n2. Launches the specified AI CLI interactively with stdin/stdout/stderr connected, so the user gets a fully interactive session\n3. The AI starts with the Middleman orchestrator prompt already injected\n\n**Connector-specific CLI flags:**\n- **`claude`** → `claude --append-system-prompt \u003cprompt\u003e` (appends to system prompt, keeping Claude's defaults)\n- **`gemini`** → `gemini --system-prompt \u003cprompt\u003e` (sets system prompt)\n- **`codex`** → `codex --instructions \u003cprompt\u003e` (sets system instructions)\n\n**Other details:**\n- `\"launch\"` was already in `root.go:46`'s skip list for `PersistentPreRunE`, so it doesn't try to initialize the orchestrator/store\n- Validates the connector name and shows sorted available options on error\n- Checks `PATH` for the CLI binary and gives a clear error if not found\n- Propagates the CLI's exit code\n- Supports `--workdir` / `-w` flag\n\nI removed `opencode` from the launch specs since its TUI doesn't have a direct system prompt injection flag for interactive mode (it uses `opencode run` for non-interactive with `--session`/`--fork` but not a standalone system prompt flag).",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:30:47.424555057+01:00",
+          "completed_at": "2026-03-19T14:32:31.278460298+01:00"
+        }
+      ],
+      "created_at": "2026-03-19T14:30:40.682893193+01:00",
+      "last_active_at": "2026-03-19T14:32:31.278460298+01:00"
+    },
+    {
+      "id": "doc-writer",
+      "connector_name": "claude",
+      "session_id": "a232c1fe-4b60-44c3-bfbb-31d111d6983c",
+      "work_dir": "/home/exponentia/Modelos_Salva/claude-the-middleman",
+      "status": "idle",
+      "briefing": "You write documentation files. You do NOT write code. When asked to create a markdown document, write it with clear structure, good examples, and in the language requested.",
+      "checkpoints": [
+        {
+          "label": "spawn",
+          "turn_index": 1,
+          "native_ref": "23eaa3ab-ff75-4ed3-840e-dd572e8af479",
+          "created_at": "2026-03-19T14:46:07.749592897+01:00"
+        },
+        {
+          "label": "pre-task-20260319-144629",
+          "turn_index": 1,
+          "native_ref": "23eaa3ab-ff75-4ed3-840e-dd572e8af479",
+          "created_at": "2026-03-19T14:46:29.145468675+01:00"
+        },
+        {
+          "label": "post-task-20260319-144723",
+          "turn_index": 5,
+          "native_ref": "5e3b1b02-bc34-49fe-96e6-55028d9a02bb",
+          "created_at": "2026-03-19T14:47:23.868417524+01:00"
+        },
+        {
+          "label": "pre-task-20260319-144930",
+          "turn_index": 5,
+          "native_ref": "5e3b1b02-bc34-49fe-96e6-55028d9a02bb",
+          "created_at": "2026-03-19T14:49:30.78108764+01:00"
+        },
+        {
+          "label": "post-task-20260319-145000",
+          "turn_index": 8,
+          "native_ref": "c9be95ea-b7b2-471c-a861-7e454fb7139c",
+          "created_at": "2026-03-19T14:50:00.779879333+01:00"
+        },
+        {
+          "label": "pre-task-20260319-145221",
+          "turn_index": 8,
+          "native_ref": "c9be95ea-b7b2-471c-a861-7e454fb7139c",
+          "created_at": "2026-03-19T14:52:21.374822077+01:00"
+        },
+        {
+          "label": "post-task-20260319-145247",
+          "turn_index": 14,
+          "native_ref": "cf38e00a-1f8f-4488-932f-992bbe61a625",
+          "created_at": "2026-03-19T14:52:47.098239046+01:00"
+        },
+        {
+          "label": "pre-task-20260319-145403",
+          "turn_index": 14,
+          "native_ref": "cf38e00a-1f8f-4488-932f-992bbe61a625",
+          "created_at": "2026-03-19T14:54:03.31352675+01:00"
+        },
+        {
+          "label": "post-task-20260319-145417",
+          "turn_index": 16,
+          "native_ref": "932ed255-af8c-4479-be65-99c93bb46564",
+          "created_at": "2026-03-19T14:54:17.122412139+01:00"
+        },
+        {
+          "label": "pre-task-20260319-145517",
+          "turn_index": 16,
+          "native_ref": "932ed255-af8c-4479-be65-99c93bb46564",
+          "created_at": "2026-03-19T14:55:17.549802455+01:00"
+        },
+        {
+          "label": "post-task-20260319-145526",
+          "turn_index": 18,
+          "native_ref": "6c95eb21-b7cc-4daa-ab64-c851d0acf879",
+          "created_at": "2026-03-19T14:55:26.59674354+01:00"
+        },
+        {
+          "label": "pre-task-20260319-145756",
+          "turn_index": 18,
+          "native_ref": "6c95eb21-b7cc-4daa-ab64-c851d0acf879",
+          "created_at": "2026-03-19T14:57:56.276877798+01:00"
+        },
+        {
+          "label": "post-task-20260319-145814",
+          "turn_index": 22,
+          "native_ref": "5f8e04ea-a12e-4342-90bd-955f52d01730",
+          "created_at": "2026-03-19T14:58:14.131351982+01:00"
+        }
+      ],
+      "task_log": [
+        {
+          "task_id": "f417114d-6ecc-4245-bbaf-8a29f1531fcd",
+          "prompt": "__spawn__",
+          "response": "OK, ready when you are. What do you need?",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:46:01.586982578+01:00",
+          "completed_at": "2026-03-19T14:46:07.749358047+01:00"
+        },
+        {
+          "task_id": "4d798a98-6d37-40e8-873c-f5a2504b119e",
+          "prompt": "Crea un archivo markdown en español llamado 'GUIDE.md' en la raíz del proyecto. Debe documentar el flujo completo de cómo se usa MDM (The Middleman). Usa TODA esta información para escribirlo:\n\n## Qué es MDM\nMDM es una CLI que orquesta múltiples agentes de IA (Claude, Codex, Gemini, OpenCode). Gestiona el ciclo de vida de los agentes, contexto, checkpoints y rewinds. El usuario nunca toca código directamente — todo se delega a agentes.\n\n## Comandos disponibles\n- mdm spawn \u003cname\u003e --briefing '...' [--connector claude|codex|gemini|opencode] — Crea un nuevo agente\n- mdm delegate --to \u003cname\u003e 'tarea' [--timeout 10m] — Envía una tarea (se ejecuta en background)\n- mdm result \u003cname\u003e [--task-id \u003cid\u003e] — Consulta el resultado de la última tarea o una específica\n- mdm status [--all] — Ver estado de todos los agentes\n- mdm inspect \u003cname\u003e [--json] — Ver detalles de un agente\n- mdm rewind \u003cname\u003e [--list] [--to \u003clabel\u003e] — Rebobinar un agente a un checkpoint anterior\n- mdm history \u003cname\u003e [--tail 5] — Ver historial de tareas\n- mdm context \u003cname\u003e 'notas' — Actualizar notas sobre lo que sabe un agente\n- mdm discard \u003cname\u003e — Descartar un agente\n- mdm launch \u003cconnector\u003e — Lanzar una sesión interactiva con el prompt de Middleman inyectado (claude, gemini, codex)\n- mdm agent-prompt — Imprimir el system prompt del Middleman\n- mdm update — Actualizar mdm a la última versión\n\n## Flujo de trabajo completo\n1. El usuario dice qué quiere hacer\n2. El Middleman (la IA orquestadora) descompone el trabajo en concerns independientes\n3. Se hace spawn de un agente por concern, cada uno con un briefing claro\n4. Se delega a TODOS en paralelo inmediatamente (paralelismo es el default)\n5. Las tareas corren en background. Se chequean resultados con mdm result\n6. Si un resultado está pending, se revisan otros agentes mientras tanto\n7. Tras obtener resultado, se actualiza contexto con mdm context\n8. Si un agente se contamina (dirección incorrecta, info obsoleta), se hace rewind\n9. Cuando un agente ya no es útil, se descarta con mdm discard\n\n## Sistema de documentación\nCada proyecto tiene dentro de .mdm/:\n- .mdm/agents.md — pasos obligatorios que todos los agentes deben seguir antes de modificar código (se inyecta automáticamente en cada briefing)\n- .mdm/docs/ — documentación del proyecto que los agentes leen antes de hacer cambios\n- .mdm/docs/_doc_template.md — template para crear nuevos docs\n\n## Principios clave\n- PARALELISMO ES EL DEFAULT. Si puedes delegar a múltiples agentes a la vez, DEBES hacerlo\n- El contexto es el recurso escaso. No contaminar un agente con tareas no relacionadas\n- Rewind es una estrategia para preservar contexto limpio\n- Un agente por concern. Preferir spawn de agente enfocado a sobrecargar uno existente\n- El Middleman nunca ve los internals del agente. Solo ve la respuesta final\n\n## Ejemplos de paralelización\n- 'implementa feature X y escribe tests' → 2 agentes en paralelo\n- 'fix bug en auth y añade logging a payments' → 2 agentes independientes\n- 'investiga cómo funciona X y luego impleméntalo' → agente de research + agente de implementación, delegar research primero, luego re-delegar a implementación con los hallazgos\n\n## Reglas del Middleman\n1. NUNCA leer, escribir o editar archivos del proyecto directamente\n2. NUNCA ejecutar comandos del proyecto (build, test, lint) directamente\n3. TODO el trabajo técnico se delega a agentes via mdm CLI\n4. El trabajo del Middleman es DECIDIR qué agente trabaja en qué, CUÁNDO rebobinar, y CÓMO mantener los contextos limpios\n\n## Conectores soportados\n- claude — Claude Code CLI\n- codex — OpenAI Codex CLI\n- gemini — Google Gemini CLI\n- opencode — OpenCode CLI\n\nEscribe el documento con buena estructura, ejemplos prácticos, y que sea una guía completa que cualquiera pueda seguir. En español.",
+          "response": "`GUIDE.md` creado en la raíz del proyecto. Incluye todas las secciones que pediste: qué es MDM, comandos, flujo completo paso a paso, sistema de documentación, principios, ejemplos de paralelización, reglas del Middleman y una referencia rápida al final.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:46:29.142111787+01:00",
+          "completed_at": "2026-03-19T14:47:23.86806142+01:00"
+        },
+        {
+          "task_id": "949eadf7-6182-40fb-8936-8d94070d92d8",
+          "prompt": "Reescribe GUIDE.md en la raíz del proyecto. Tiene que ser MUCHO más corto — máximo 80-100 líneas. El usuario quiere poder leerlo rápido. Elimina redundancia, combina secciones, usa listas compactas en vez de bloques de código largos. Mantén solo: qué es, comandos (tabla compacta), flujo resumido, un ejemplo práctico corto, y los principios en una lista. Nada de repetir las reglas del Middleman por separado. Sin sección de referencia rápida si ya están los comandos arriba. Directo al grano.",
+          "response": "Listo. `GUIDE.md` reescrito: ~75 líneas, toda la info condensada. Tabla compacta de comandos, flujo en 7 pasos, un solo ejemplo práctico que cubre el ciclo completo, y principios en una lista. Sin redundancia.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:49:30.776738924+01:00",
+          "completed_at": "2026-03-19T14:50:00.778744107+01:00"
+        },
+        {
+          "task_id": "c2121831-f2dd-4d7c-b632-3cd6e0752559",
+          "prompt": "Lee el archivo .mdm/docs/_doc_template.md para ver el formato que deben seguir los docs. Luego lee los archivos que hay dentro de .mdm/docs/ para saber qué docs existen. Después crea el archivo .mdm/docs/_project_overview.md siguiendo el template. Este doc debe explicar qué hace MDM (The Middleman) como aplicación, y listar/describir brevemente todos los archivos de documentación que hay en .mdm/docs/. Sé conciso.",
+          "response": "Creado `.mdm/docs/_project_overview.md` siguiendo el template (secciones What It Does, Main Files, Flow). Incluye descripción de MDM y un índice de los 3 docs existentes en `.mdm/docs/`.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:52:21.371603222+01:00",
+          "completed_at": "2026-03-19T14:52:47.097280328+01:00"
+        },
+        {
+          "task_id": "7c61b96d-98d5-4127-846d-4c6baf097812",
+          "prompt": "Crea el archivo .mdm/docs/_project_overview_template.md. Debe ser un template reutilizable para crear project overviews en cualquier proyecto. Basa la estructura en el _project_overview.md que ya existe (secciones: What It Does, Main Files, Flow, Documentación disponible), pero con placeholders y comentarios que expliquen qué poner en cada sección. Sé conciso — que sea fácil de rellenar.",
+          "response": "Creado `.mdm/docs/_project_overview_template.md`. Template con las 4 secciones, placeholders entre `[]` y comentarios HTML explicando qué poner en cada una.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:54:03.308624496+01:00",
+          "completed_at": "2026-03-19T14:54:17.120948968+01:00"
+        },
+        {
+          "task_id": "564818a4-1a34-40f8-aec9-f8d526222ec8",
+          "prompt": "Renombra el archivo .mdm/docs/_project_overview.md a .mdm/docs/project_overview.md (sin el underscore al principio). Usa 'mv' para moverlo. El underscore es para templates, y este no es un template sino el doc real del proyecto.",
+          "response": "Listo. Renombrado a `project_overview.md`.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:55:17.544562824+01:00",
+          "completed_at": "2026-03-19T14:55:26.595221069+01:00"
+        },
+        {
+          "task_id": "36a620c2-dceb-4b74-8174-9e0288443618",
+          "prompt": "Lee el archivo .mdm/docs/_doc_template.md actual y también .mdm/docs/_project_overview_template.md como referencia de estilo. Reescribe _doc_template.md manteniendo sus secciones originales pero aplicando el mismo estilo que el project overview template: placeholders entre [] y comentarios HTML explicando qué poner en cada sección. Mantén la estructura y secciones del doc template original, solo mejora el formato.",
+          "response": "Listo. `_doc_template.md` reescrito con el mismo estilo: placeholders entre `[]`, comentarios HTML en cada sección, y las best practices + file naming condensadas al final en dos líneas.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T14:57:56.271824498+01:00",
+          "completed_at": "2026-03-19T14:58:14.130070284+01:00"
+        }
+      ],
+      "created_at": "2026-03-19T14:46:07.749358047+01:00",
+      "last_active_at": "2026-03-19T14:58:14.130070284+01:00"
+    },
+    {
+      "id": "prompt-writer",
+      "connector_name": "claude",
+      "session_id": "d52c2a9f-f06a-4df5-bbf9-b22274cd8ea7",
+      "work_dir": "/home/exponentia/Modelos_Salva/claude-the-middleman",
+      "status": "idle",
+      "briefing": "You rewrite the MDM agent prompt (cmd/agent_prompt.go). You understand async orchestration patterns and UX for CLI-based AI agents.",
+      "checkpoints": [
+        {
+          "label": "spawn",
+          "turn_index": 1,
+          "native_ref": "9c3520ba-1624-43cd-8cda-5497d2577973",
+          "created_at": "2026-03-19T15:01:42.608319058+01:00"
+        },
+        {
+          "label": "pre-task-20260319-150156",
+          "turn_index": 1,
+          "native_ref": "9c3520ba-1624-43cd-8cda-5497d2577973",
+          "created_at": "2026-03-19T15:01:56.6531444+01:00"
+        },
+        {
+          "label": "post-task-20260319-150238",
+          "turn_index": 4,
+          "native_ref": "b867ba99-20aa-4eb0-b953-fa1c8a9dfc7e",
+          "created_at": "2026-03-19T15:02:38.79986553+01:00"
+        }
+      ],
+      "task_log": [
+        {
+          "task_id": "23dcf661-77f0-4c12-aaa2-3d049b91ae48",
+          "prompt": "__spawn__",
+          "response": "\n\nWhat can I help you with?",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T15:01:37.752005364+01:00",
+          "completed_at": "2026-03-19T15:01:42.608150569+01:00"
+        },
+        {
+          "task_id": "f368c753-9f13-4e70-a959-4985e8320114",
+          "prompt": "Read cmd/agent_prompt.go and rewrite the agent prompt (the big string that gets printed). The current workflow section tells the Middleman to check results and wait. This is WRONG — it blocks the user.\n\nNew behavior rules to encode in the prompt:\n\n## Async-first flow\n1. After 'mdm delegate', NEVER wait or poll. Return control to the user immediately with zero commentary.\n2. Use the AI tool's 'run_in_background' capability to check 'mdm result' WITHOUT blocking the conversation.\n3. Only speak to the user when: (a) a result is ready and worth reporting, (b) you need a decision, (c) user asks.\n4. Minimize token usage — don't narrate actions. No 'Let me check...', no 'Delegating now...'. Just DO it silently.\n\n## Delegation\n5. When delegating, run 'mdm delegate' commands in background too if possible. Fire and forget.\n6. Multiple independent tasks = multiple delegates in ONE shot, all background.\n\n## Results\n7. When checking results, if pending, do NOT retry in a loop. Move on. Check again only when user asks or when doing other work.\n8. When a result is ready, give a SHORT summary — the result itself, not meta-commentary about the process.\n\n## General\n9. Keep the existing rules about never touching code directly, one agent per concern, parallelism default, rewind strategy.\n10. Remove or rewrite any instruction that implies sequential polling or blocking.\n\nMake sure the prompt is clean, well-structured, and production-quality. Keep it concise — every line should earn its place.",
+          "response": "Done. Key changes:\n\n- **Removed** the sequential polling workflow (old steps 6-7 about checking results and blocking)\n- **Added** async-first rules: delegate in background, return control immediately, never narrate\n- **Added** \"Checking results\" section with explicit no-polling rule — check opportunistically or in background only\n- **Rewrote** workflow as \"Async workflow\" — fire all delegates in one shot, return control, done\n- **Condensed** principles to lead with ASYNC, PARALLELISM, SILENCE as the three defaults\n- **Removed** parallelization examples (the rules are clear enough without them)\n- **Stripped** commentary from command docs (removed \"Delegate returns immediately...\" and \"If status is pending...\" — the workflow section covers this)",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T15:01:56.649912936+01:00",
+          "completed_at": "2026-03-19T15:02:38.799055215+01:00"
+        }
+      ],
+      "created_at": "2026-03-19T15:01:42.608150569+01:00",
+      "last_active_at": "2026-03-19T15:02:38.799055215+01:00"
+    },
+    {
+      "id": "remover",
+      "connector_name": "claude",
+      "session_id": "8280f86f-8837-4afd-8867-3a288dd7f6eb",
+      "work_dir": "/home/exponentia/Modelos_Salva/claude-the-middleman",
+      "status": "idle",
+      "briefing": "You refactor MDM CLI commands. You understand Go, cobra CLI framework, and the MDM codebase structure.",
+      "checkpoints": [
+        {
+          "label": "spawn",
+          "turn_index": 1,
+          "native_ref": "a56b38c8-2c03-4700-92ec-9a1aacd972a6",
+          "created_at": "2026-03-19T16:11:50.894070992+01:00"
+        },
+        {
+          "label": "pre-task-20260319-161151",
+          "turn_index": 1,
+          "native_ref": "a56b38c8-2c03-4700-92ec-9a1aacd972a6",
+          "created_at": "2026-03-19T16:11:51.904354937+01:00"
+        },
+        {
+          "label": "post-task-20260319-161310",
+          "turn_index": 25,
+          "native_ref": "060e176d-4868-4bd5-a0a8-5267730e3504",
+          "created_at": "2026-03-19T16:13:10.20045126+01:00"
+        }
+      ],
+      "task_log": [
+        {
+          "task_id": "1795d121-9292-4630-a202-663bee42d785",
+          "prompt": "__spawn__",
+          "response": "Got it, I'm ready to help. What would you like to do?",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T16:11:46.215747085+01:00",
+          "completed_at": "2026-03-19T16:11:50.893774606+01:00"
+        },
+        {
+          "task_id": "7ac74dbe-455f-43f0-b67c-8081b84046ee",
+          "prompt": "Refactor the 'discard' command to 'remove'. The command should COMPLETELY DELETE the agent from registry.json, not just mark it as discarded. Steps:\n\n1. Rename cmd/discard.go to cmd/remove.go (create new, delete old)\n2. Change the command name from 'discard' to 'remove' everywhere\n3. In orchestrator/orchestrator.go, change the Discard method to Remove — it should delete the agent from the registry entirely, not just set status to discarded\n4. In agent/registry.go, add a Remove/Delete method that actually removes the agent from the map\n5. Update any references in agent_prompt.go (the prompt template mentions 'mdm discard')\n6. Update cmd/root.go if it references discard anywhere\n7. Make sure 'mdm status --all' no longer shows removed agents (because they don't exist anymore)\n\nBuild with 'go build ./...' to verify it compiles. Use ~/go/bin/go if 'go' is not in PATH.",
+          "response": "Build succeeds (just a GOPATH warning, no errors). Here's a summary of all changes:\n\n1. **Created `cmd/remove.go`** — new command calling `orch.Remove()`\n2. **Deleted `cmd/discard.go`** — old command removed\n3. **`orchestrator/orchestrator.go`** — replaced `Discard()` (which set status) with `Remove()` (which calls `reg.Delete()` to fully remove the agent)\n4. **`agent/agent.go`** — removed `StatusDiscarded` constant\n5. **`cmd/agent_prompt.go`** — updated prompt template: `mdm discard` → `mdm remove`, \"discard it\" → \"remove it\", updated `--all` description\n6. **`cmd/status.go`** — updated `--all` flag help text from \"include discarded agents\" to \"include all agents\"\n\nThe `registry.Delete()` method already existed in `agent/registry.go` and removes the agent from the slice entirely, so `mdm status --all` won't show removed agents since they no longer exist in the registry.",
+          "is_error": false,
+          "status": "completed",
+          "started_at": "2026-03-19T16:11:51.900244991+01:00",
+          "completed_at": "2026-03-19T16:13:10.19908118+01:00"
+        }
+      ],
+      "created_at": "2026-03-19T16:11:50.893774606+01:00",
+      "last_active_at": "2026-03-19T16:13:10.19908118+01:00"
     }
   ]
 }

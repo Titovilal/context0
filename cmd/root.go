@@ -43,7 +43,7 @@ The Middleman manages agent lifecycle, context, checkpoints, and rewinds.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip heavy init for commands that don't need the orchestrator.
 		name := cmd.Name()
-		if name == "mdm" || name == "agent-prompt" || name == "update" || name == "version" {
+		if name == "mdm" || name == "agent-prompt" || name == "launch" || name == "update" || name == "version" || name == "sync-docs" {
 			return nil
 		}
 

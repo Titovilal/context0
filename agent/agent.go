@@ -5,10 +5,9 @@ import "time"
 type Status string
 
 const (
-	StatusActive    Status = "active"
-	StatusIdle      Status = "idle"
-	StatusWorking   Status = "working"
-	StatusDiscarded Status = "discarded"
+	StatusActive  Status = "active"
+	StatusIdle    Status = "idle"
+	StatusWorking Status = "working"
 )
 
 // Agent is the registry record for a single AI agent instance.
@@ -21,10 +20,6 @@ type Agent struct {
 
 	// Briefing is the initial context given at spawn time.
 	Briefing string `json:"briefing"`
-
-	// KnownContext is a free-text summary the Middleman maintains about
-	// what this agent knows: files read, decisions made, etc.
-	KnownContext string `json:"known_context,omitempty"`
 
 	// Checkpoints is an ordered list of save points (oldest first).
 	Checkpoints []CheckpointRecord `json:"checkpoints"`

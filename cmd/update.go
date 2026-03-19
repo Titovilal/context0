@@ -59,25 +59,36 @@ var updateCmd = &cobra.Command{
 		}
 		dlURL := fmt.Sprintf("https://github.com/Titovilal/middleman/releases/download/%s/%s", latest, asset)
 
+		// Determine install target early so we can download next to it.
+		installPath, migrated := resolveInstallPath()
+		fmt.Printf("Installing to %s...\n", installPath)
+
+		if err := os.MkdirAll(filepath.Dir(installPath), 0o755); err != nil {
+			return fmt.Errorf("create install dir: %w", err)
+		}
+
 		// Download using net/http (no dependency on curl).
 		fmt.Printf("Downloading %s...\n", latest)
-		tmp := filepath.Join(os.TempDir(), "mdm-update")
+		// Download to the same directory as the install target so os.Rename
+		// never crosses a volume boundary (common cause of "Access is denied"
+		// on Windows when %TEMP% is on a different drive).
+		tmpName := "mdm-update"
+		if goos == "windows" {
+			tmpName += ".exe"
+		}
+		tmp := filepath.Join(filepath.Dir(installPath), tmpName)
 		if err := downloadFile(dlURL, tmp); err != nil {
-			return err
+			// Fallback: try system temp if the install dir isn't writable yet.
+			tmp = filepath.Join(os.TempDir(), tmpName)
+			if err := downloadFile(dlURL, tmp); err != nil {
+				return err
+			}
 		}
 
 		if goos != "windows" {
 			if err := os.Chmod(tmp, 0o755); err != nil {
 				return fmt.Errorf("chmod failed: %w", err)
 			}
-		}
-
-		// Determine install target.
-		installPath, migrated := resolveInstallPath()
-		fmt.Printf("Installing to %s...\n", installPath)
-
-		if err := os.MkdirAll(filepath.Dir(installPath), 0o755); err != nil {
-			return fmt.Errorf("create install dir: %w", err)
 		}
 
 		if err := installBinary(tmp, installPath); err != nil {
@@ -169,10 +180,16 @@ func downloadFile(url, dest string) error {
 }
 
 // installBinary moves the temp file to the target, with sudo fallback on Unix.
+// On Windows, the running exe is locked and cannot be overwritten, so we rename
+// it out of the way first (Windows allows renaming a running exe).
 func installBinary(tmp, target string) error {
+	if runtime.GOOS == "windows" {
+		return installBinaryWindows(tmp, target)
+	}
+
 	if err := os.Rename(tmp, target); err != nil {
 		// Rename failed (cross-device or permissions).
-		if runtime.GOOS != "windows" && strings.HasPrefix(target, "/usr/") {
+		if strings.HasPrefix(target, "/usr/") {
 			mvCmd := exec.Command("sudo", "mv", tmp, target)
 			mvCmd.Stderr = os.Stderr
 			if err := mvCmd.Run(); err != nil {
@@ -180,9 +197,49 @@ func installBinary(tmp, target string) error {
 			}
 			return nil
 		}
-		// Fallback: copy bytes (handles cross-device on Windows too).
+		// Fallback: copy bytes (handles cross-device).
 		return copyFile(tmp, target)
 	}
+	return nil
+}
+
+// installBinaryWindows handles the Windows-specific update dance:
+// 1. Remove any leftover .old file from a previous update.
+// 2. Rename the running exe to .old (Windows allows this).
+// 3. Move/copy the new binary into the target path.
+func installBinaryWindows(tmp, target string) error {
+	oldPath := target + ".old"
+
+	// Clean up leftover .old from a previous update.
+	// If it's still locked, try a unique name instead.
+	if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
+		// .old is locked (still running from a previous session); use a
+		// timestamped name so we don't block on it.
+		oldPath = fmt.Sprintf("%s.old.%d", target, os.Getpid())
+	}
+
+	// If the target already exists (i.e. we are updating in place),
+	// rename it out of the way. Windows locks running exes against
+	// deletion and overwriting but allows renames.
+	if _, err := os.Stat(target); err == nil {
+		if err := os.Rename(target, oldPath); err != nil {
+			return fmt.Errorf("failed to rename running binary out of the way: %w", err)
+		}
+	}
+
+	// Now the target path is free — move the new binary there.
+	if err := os.Rename(tmp, target); err != nil {
+		// Cross-device: fall back to byte copy.
+		if err := copyFile(tmp, target); err != nil {
+			// Attempt to restore the old binary on failure.
+			_ = os.Rename(oldPath, target)
+			return fmt.Errorf("install failed: %w", err)
+		}
+	}
+
+	// Clean up the temp file if copyFile was used (rename would have removed it).
+	_ = os.Remove(tmp)
+
 	return nil
 }
 

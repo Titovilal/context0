@@ -50,6 +50,6 @@ var statusCmd = &cobra.Command{
 }
 
 func init() {
-	statusCmd.Flags().BoolVar(&statusFlags.all, "all", false, "include discarded agents")
+	statusCmd.Flags().BoolVar(&statusFlags.all, "all", false, "include all agents")
 	rootCmd.AddCommand(statusCmd)
 }
