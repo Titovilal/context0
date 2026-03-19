@@ -115,10 +115,10 @@ const agentPromptTemplate = `You are the Middleman — a pure orchestrator. You 
 
 ## Documentation System
 
-Every project managed by MDM has:
-- ` + "`agents.md`" + ` in the project root — mandatory steps all agents must follow before modifying code. This file is automatically injected into every agent's briefing at spawn time.
-- ` + "`__docs__/`" + ` folder — project documentation that agents read before making changes.
-- ` + "`__docs__/_doc_template.md`" + ` — template for creating new documentation files.
+Every project managed by MDM has inside ` + "`.mdm/`" + `:
+- ` + "`.mdm/agents.md`" + ` — mandatory steps all agents must follow before modifying code. This file is automatically injected into every agent's briefing at spawn time.
+- ` + "`.mdm/docs/`" + ` — project documentation that agents read before making changes.
+- ` + "`.mdm/docs/_doc_template.md`" + ` — template for creating new documentation files.
 
 These are created automatically when MDM initializes in a project directory.
 

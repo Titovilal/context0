@@ -32,18 +32,16 @@ func New(dir string) (*Store, error) {
 		return nil, fmt.Errorf("create .mdm dir: %w", err)
 	}
 
-	// Initialize __docs__/ folder with default files.
-	initDocs(dir)
-
-	// Copy agents.md to project root if it doesn't exist.
-	initAgentsMD(dir)
+	// Initialize docs/ and agents.md inside .mdm/.
+	initDocs(ctmDir)
+	initAgentsMD(ctmDir)
 
 	return &Store{path: filepath.Join(ctmDir, registryFileName)}, nil
 }
 
-// initDocs creates the __docs__/ folder with the default template if it doesn't exist.
-func initDocs(dir string) {
-	docsDir := filepath.Join(dir, "__docs__")
+// initDocs creates the docs/ folder with the default template inside .mdm/.
+func initDocs(mdmDir string) {
+	docsDir := filepath.Join(mdmDir, "docs")
 	_ = os.MkdirAll(docsDir, 0o755)
 
 	templatePath := filepath.Join(docsDir, "_doc_template.md")
@@ -52,9 +50,9 @@ func initDocs(dir string) {
 	}
 }
 
-// initAgentsMD creates the agents.md file in the project root if it doesn't exist.
-func initAgentsMD(dir string) {
-	agentsPath := filepath.Join(dir, "agents.md")
+// initAgentsMD creates the agents.md file inside .mdm/.
+func initAgentsMD(mdmDir string) {
+	agentsPath := filepath.Join(mdmDir, "agents.md")
 	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
 		_ = os.WriteFile(agentsPath, []byte(agentsMDContent), 0o644)
 	}
@@ -105,8 +103,8 @@ Example:
 
 const agentsMDContent = `# Mandatory steps to update the code base
 
-1. List ` + "`__docs__/`" + ` folder.
-2. Read ` + "`__docs__/doc_project_overview.md`" + `.
+1. List ` + "`.mdm/docs/`" + ` folder.
+2. Read ` + "`.mdm/docs/doc_project_overview.md`" + `.
 3. Read the next specific document(s) if needed.
 4. Make the necessary changes.
 5. Update the affected document(s).

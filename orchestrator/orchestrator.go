@@ -331,9 +331,9 @@ func (o *Orchestrator) UpdateContext(ctx context.Context, agentID, knownContext 
 
 // --- helpers ---
 
-// buildBriefing prepends the agents.md content to the user-provided briefing.
+// buildBriefing prepends the .mdm/agents.md content to the user-provided briefing.
 func (o *Orchestrator) buildBriefing(briefing string) string {
-	agentsPath := filepath.Join(o.workDir, "agents.md")
+	agentsPath := filepath.Join(o.workDir, ".mdm", "agents.md")
 	data, err := os.ReadFile(agentsPath)
 	if err != nil {
 		// No agents.md found, just use the original briefing.
