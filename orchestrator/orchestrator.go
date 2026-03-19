@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Titovilal/middleman/agent"
@@ -26,7 +27,7 @@ func New(s *store.Store, connectors *connector.ConnectorRegistry, workDir string
 
 // Spawn creates a new agent with the given briefing and runs an initial probe.
 // If the agent already exists, it delegates the task to the existing agent instead.
-// The agents.md file from the working directory is automatically prepended to the briefing.
+// The agent behavior guide is automatically prepended to the briefing.
 func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName, task string, timeout time.Duration) (*agent.Agent, *agent.TaskRecord, error) {
 	// If agent already exists, delegate the task to it.
 	reg, err := o.store.Load()
@@ -51,7 +52,7 @@ func (o *Orchestrator) Spawn(ctx context.Context, id, briefing, connectorName, t
 		return nil, nil, fmt.Errorf("connector %q not registered", connectorName)
 	}
 
-	// Prepend agents.md content to briefing so every agent reads it.
+	// Build full briefing with guides, project overview, and docs list.
 	fullBriefing := o.buildBriefing(briefing)
 
 	req := connector.RunRequest{
@@ -348,20 +349,46 @@ func (o *Orchestrator) ListAgents(ctx context.Context, statuses ...agent.Status)
 
 // --- helpers ---
 
-// buildBriefing prepends the .mdm/agents.md content to the user-provided briefing.
+// buildBriefing assembles the full briefing: agent behavior guide,
+// project overview, available docs list, and the user's briefing.
 func (o *Orchestrator) buildBriefing(briefing string) string {
-	agentsPath := filepath.Join(o.workDir, ".mdm", "agents.md")
-	data, err := os.ReadFile(agentsPath)
-	if err != nil {
-		// No agents.md found, just use the original briefing.
-		return briefing
+	var parts []string
+
+	parts = append(parts, "# Current project state")
+
+	// Agent behavior guide.
+	if data, err := os.ReadFile(filepath.Join(o.workDir, ".mdm", "guides", "how_agents_should_behave.md")); err == nil {
+		parts = append(parts, fmt.Sprintf("## .mdm/guides/how_agents_should_behave.md\n\n%s", string(data)))
 	}
 
-	agentsContent := string(data)
-	if briefing == "" {
-		return agentsContent
+	// project_overview.md — so the agent understands the codebase.
+	if data, err := os.ReadFile(filepath.Join(o.workDir, ".mdm", "docs", "project_overview.md")); err == nil {
+		parts = append(parts, fmt.Sprintf("## .mdm/docs/project_overview.md\n\n%s", string(data)))
 	}
-	return agentsContent + "\n\n---\n\n" + briefing
+
+	// List available docs so the agent knows what to read without listing the dir.
+	docsDir := filepath.Join(o.workDir, ".mdm", "docs")
+	if entries, err := os.ReadDir(docsDir); err == nil {
+		var names []string
+		for _, e := range entries {
+			if !e.IsDir() && e.Name() != "project_overview.md" {
+				names = append(names, e.Name())
+			}
+		}
+		if len(names) > 0 {
+			list := "## Available docs in .mdm/docs/\n"
+			for _, n := range names {
+				list += "- " + n + "\n"
+			}
+			parts = append(parts, list)
+		}
+	}
+
+	if briefing != "" {
+		parts = append(parts, "## Briefing\n\n"+briefing)
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
 func (o *Orchestrator) loadAgentAndConnector(agentID string) (connector.AgentConnector, *agent.Agent, error) {

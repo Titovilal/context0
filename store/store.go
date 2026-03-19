@@ -26,15 +26,15 @@ type Store struct {
 
 // New creates a Store pointing to dir/.mdm/registry.json.
 // The directory is created if it doesn't exist.
-// defaultsFS should contain the embedded .mdm/ defaults (templates, guides,
-// agents.md). Files are written only if they don't already exist.
+// defaultsFS should contain the embedded .mdm/ defaults (templates, guides).
+// Files are written only if they don't already exist.
 func New(dir string, defaultsFS fs.FS) (*Store, error) {
 	ctmDir := filepath.Join(dir, ".mdm")
 	if err := os.MkdirAll(ctmDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create .mdm dir: %w", err)
 	}
 
-	// Initialize default files (templates, guides, agents.md) inside .mdm/.
+	// Initialize default files (templates, guides) inside .mdm/.
 	if defaultsFS != nil {
 		initDefaults(ctmDir, defaultsFS)
 	}

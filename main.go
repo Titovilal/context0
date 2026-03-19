@@ -6,7 +6,7 @@ import (
 	"github.com/Titovilal/middleman/cmd"
 )
 
-//go:embed .mdm/agents.md .mdm/templates .mdm/guides
+//go:embed defaults
 var defaultsFS embed.FS
 
 func main() {
