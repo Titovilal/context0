@@ -13,9 +13,10 @@ var agentPromptFlags struct {
 }
 
 var agentPromptCmd = &cobra.Command{
-	Use:   "agent-prompt",
-	Short: "Print the system prompt for an AI agent acting as the Middleman",
-	Long:  `Outputs instructions that an AI agent should follow to act as the MDM Middleman orchestrator. Pipe this into your agent's system prompt or CLAUDE.md.`,
+	Use:         "agent-prompt",
+	Short:       "Print the system prompt for an AI agent acting as the Middleman",
+	Long:        `Outputs instructions that an AI agent should follow to act as the MDM Middleman orchestrator. Pipe this into your agent's system prompt or CLAUDE.md.`,
+	Annotations: map[string]string{"skip_init": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		mdmBin, err := os.Executable()
 		if err != nil {

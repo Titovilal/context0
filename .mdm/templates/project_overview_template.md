@@ -13,7 +13,6 @@
 3. [What is the result]
 
 ## Documentation available in `.mdm/docs/`
-- **`_doc_template.md`** — template for creating new docs
 - **`[doc_name].md`** — [what it documents]
 
 ---

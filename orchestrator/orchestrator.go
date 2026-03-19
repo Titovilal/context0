@@ -277,6 +277,10 @@ func (o *Orchestrator) Rewind(ctx context.Context, agentID, checkpointLabel stri
 		return nil, fmt.Errorf("no checkpoint found for agent %s (label: %q)", agentID, checkpointLabel)
 	}
 
+	if !conn.SupportsFork() {
+		fmt.Printf("warning: connector %q does not support true fork — rewind will modify the original session\n", a.ConnectorName)
+	}
+
 	newSessionID, err := conn.Fork(ctx, a.SessionID, connector.Checkpoint{
 		Label:     cp.Label,
 		TurnIndex: cp.TurnIndex,

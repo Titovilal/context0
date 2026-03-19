@@ -22,8 +22,9 @@ type ghRelease struct {
 }
 
 var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update mdm to the latest version",
+	Use:         "update",
+	Short:       "Update mdm to the latest version",
+	Annotations: map[string]string{"skip_init": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Current version: %s\n", Version)
 
@@ -265,8 +266,9 @@ func copyFile(src, dst string) error {
 }
 
 var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the current version",
+	Use:         "version",
+	Short:       "Print the current version",
+	Annotations: map[string]string{"skip_init": "true"},
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(strings.TrimPrefix(Version, "v"))
 	},

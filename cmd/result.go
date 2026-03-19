@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Titovilal/middleman/agent"
 	"github.com/spf13/cobra"
 )
 
@@ -38,11 +39,11 @@ var resultCmd = &cobra.Command{
 		fmt.Printf("prompt:  %s\n", task.Prompt)
 
 		switch task.Status {
-		case "pending":
+		case agent.TaskPending:
 			fmt.Println("\nTask is still running. Check again later.")
-		case "completed":
+		case agent.TaskCompleted:
 			fmt.Printf("\n%s\n", task.Response)
-		case "failed":
+		case agent.TaskFailed:
 			fmt.Printf("\n[error] %s\n", task.ErrorDetail)
 			if task.Response != "" {
 				fmt.Printf("\n%s\n", task.Response)

@@ -44,8 +44,9 @@ var launchSpecs = map[string]launchSpec{
 }
 
 var launchCmd = &cobra.Command{
-	Use:   "launch <connector>",
-	Short: "Launch an interactive AI CLI session with the Middleman prompt injected",
+	Use:         "launch <connector>",
+	Short:       "Launch an interactive AI CLI session with the Middleman prompt injected",
+	Annotations: map[string]string{"skip_init": "true"},
 	Long: `Launches the specified AI CLI tool (claude, gemini, codex) in interactive mode
 with the Middleman orchestrator prompt automatically injected. The user gets
 a fully interactive session where the AI is already acting as the Middleman.

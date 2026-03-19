@@ -143,9 +143,9 @@ func (c *Connector) Fork(ctx context.Context, sourceSessionID string, checkpoint
 	return result.SessionID, nil
 }
 
-// TurnCount for Gemini parses the JSONL output counting assistant turns.
-// Since Gemini doesn't expose session files the same way Claude does,
-// we return 0 with no error to allow checkpoints to work (degraded).
+func (c *Connector) SupportsFork() bool { return false }
+
+// TurnCount for Gemini returns 0 to allow checkpoints to work (degraded).
 func (c *Connector) TurnCount(ctx context.Context, sessionID string) (int, error) {
 	return 0, nil
 }

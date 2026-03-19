@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"embed"
 	"fmt"
 	"os"
 
@@ -14,6 +15,11 @@ import (
 	"github.com/Titovilal/middleman/store"
 	"github.com/spf13/cobra"
 )
+
+var defaultsFS embed.FS
+
+// SetDefaultsFS receives the embedded .mdm/ defaults from main.go.
+func SetDefaultsFS(fs embed.FS) { defaultsFS = fs }
 
 var (
 	cfg   *config.Config
@@ -41,9 +47,9 @@ The Middleman manages agent lifecycle, context, checkpoints, and rewinds.`,
   Run 'mdm --help' for all commands.`)
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip heavy init for commands that don't need the orchestrator.
-		name := cmd.Name()
-		if name == "mdm" || name == "agent-prompt" || name == "launch" || name == "update" || name == "version" || name == "sync-docs" {
+		// Skip heavy init for the root command and any command that
+		// annotates itself with skip_init (no orchestrator needed).
+		if cmd.Name() == "mdm" || cmd.Annotations["skip_init"] == "true" {
 			return nil
 		}
 
@@ -56,7 +62,13 @@ The Middleman manages agent lifecycle, context, checkpoints, and rewinds.`,
 		}
 		cfg.GlobalMode = flags.global
 
-		s, err := store.New(cfg.WorkDir)
+		var s *store.Store
+		var err error
+		if cfg.GlobalMode {
+			s, err = store.NewGlobal()
+		} else {
+			s, err = store.New(cfg.WorkDir)
+		}
 		if err != nil {
 			return fmt.Errorf("init store: %w", err)
 		}

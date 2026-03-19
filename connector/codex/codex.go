@@ -154,6 +154,8 @@ func (c *Connector) Fork(ctx context.Context, sourceSessionID string, checkpoint
 	return result.SessionID, nil
 }
 
+func (c *Connector) SupportsFork() bool { return false }
+
 // TurnCount reads session JSONL files and counts turn.completed events.
 func (c *Connector) TurnCount(ctx context.Context, sessionID string) (int, error) {
 	path := c.sessionFilePath(sessionID)

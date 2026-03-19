@@ -36,9 +36,6 @@ type RunResult struct {
 	// FinalText is the agent's final response only.
 	FinalText string
 
-	// TurnIndex is the turn count after this run.
-	TurnIndex int
-
 	IsError     bool
 	ErrorDetail string
 }
@@ -71,6 +68,10 @@ type AgentConnector interface {
 	// Fork creates a new session branching from sourceSessionID at the given checkpoint.
 	// The original session is not modified. Returns the new session ID.
 	Fork(ctx context.Context, sourceSessionID string, checkpoint Checkpoint) (string, error)
+
+	// SupportsFork reports whether Fork creates a true independent branch.
+	// When false, Fork resumes in place and modifies the original session.
+	SupportsFork() bool
 
 	// TurnCount returns the current number of assistant turn pairs in the session.
 	TurnCount(ctx context.Context, sessionID string) (int, error)

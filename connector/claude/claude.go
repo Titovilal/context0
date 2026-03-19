@@ -129,6 +129,8 @@ func (c *Connector) Fork(ctx context.Context, sourceSessionID string, checkpoint
 	return result.SessionID, nil
 }
 
+func (c *Connector) SupportsFork() bool { return true }
+
 func (c *Connector) TurnCount(ctx context.Context, sessionID string) (int, error) {
 	path, err := c.sessionFilePath(sessionID)
 	if err != nil {

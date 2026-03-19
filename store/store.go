@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -25,91 +26,58 @@ type Store struct {
 
 // New creates a Store pointing to dir/.mdm/registry.json.
 // The directory is created if it doesn't exist.
-// It also initializes the __docs__/ folder with default files if they don't exist.
-func New(dir string) (*Store, error) {
+// defaultsFS should contain the embedded .mdm/ defaults (templates, guides,
+// agents.md). Files are written only if they don't already exist.
+func New(dir string, defaultsFS fs.FS) (*Store, error) {
 	ctmDir := filepath.Join(dir, ".mdm")
 	if err := os.MkdirAll(ctmDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create .mdm dir: %w", err)
 	}
 
-	// Initialize docs/ and agents.md inside .mdm/.
-	initDocs(ctmDir)
-	initAgentsMD(ctmDir)
+	// Initialize default files (templates, guides, agents.md) inside .mdm/.
+	if defaultsFS != nil {
+		initDefaults(ctmDir, defaultsFS)
+	}
 
 	return &Store{path: filepath.Join(ctmDir, registryFileName)}, nil
 }
 
-// initDocs creates the docs/ folder with the default template inside .mdm/.
-func initDocs(mdmDir string) {
-	docsDir := filepath.Join(mdmDir, "docs")
-	_ = os.MkdirAll(docsDir, 0o755)
+// initDefaults walks the embedded defaults/ tree and writes each file
+// into mdmDir if it doesn't already exist. The directory structure inside
+// defaults/ mirrors what should appear inside .mdm/ (e.g. defaults/templates/
+// → .mdm/templates/).
+func initDefaults(mdmDir string) {
+	_ = fs.WalkDir(defaultsFS, "defaults", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || path == "defaults" {
+			return nil
+		}
+		// Strip the "defaults/" prefix to get the relative path inside .mdm/.
+		rel := path[len("defaults/"):]
+		target := filepath.Join(mdmDir, rel)
 
-	templatePath := filepath.Join(docsDir, "_doc_template.md")
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		_ = os.WriteFile(templatePath, []byte(docTemplate), 0o644)
-	}
+		if d.IsDir() {
+			_ = os.MkdirAll(target, 0o755)
+			return nil
+		}
+
+		// Skip .gitkeep markers used only for embedding empty dirs.
+		if d.Name() == ".gitkeep" {
+			return nil
+		}
+
+		// Only write if the file doesn't already exist.
+		if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+			return nil
+		}
+
+		data, readErr := defaultsFS.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		_ = os.WriteFile(target, data, 0o644)
+		return nil
+	})
 }
-
-// initAgentsMD creates the agents.md file inside .mdm/.
-func initAgentsMD(mdmDir string) {
-	agentsPath := filepath.Join(mdmDir, "agents.md")
-	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
-		_ = os.WriteFile(agentsPath, []byte(agentsMDContent), 0o644)
-	}
-}
-
-const docTemplate = `# Guide to Creating Feature Documentation
-
-## Objective
-Create simple, high-level documentation that explains what a feature does and how components work together.
-
-## Template
-
-` + "```markdown" + `
-# [Feature Name]
-
-## What It Does
-[Brief explanation in 1-3 sentences]
-
-## Main Files
-- ` + "`file1.py`" + ` - [role]
-- ` + "`file2.py`" + ` - [role]
-
-## Flow
-1. [What starts the process]
-2. [What happens in the middle]
-3. [What's the result]
-` + "```" + `
-
-## Best Practices
-
-### Do
-- Keep it short and simple
-- Focus on the big picture
-- Use plain language
-
-### Avoid
-- Code snippets
-- Implementation details
-- Complex technical jargon
-
-## File Naming
-
-` + "`[some_name].md`" + `
-
-Example:
-- ` + "`project_overview.md`" + `
-`
-
-const agentsMDContent = `# Mandatory steps to update the code base
-
-1. List ` + "`.mdm/docs/`" + ` folder.
-2. Read ` + "`.mdm/docs/doc_project_overview.md`" + `.
-3. Read the next specific document(s) if needed.
-4. Make the necessary changes.
-5. Update the affected document(s).
-6. For more follow-up changes, repeat from step 3.
-`
 
 // NewGlobal creates a Store in ~/.mdm/registry.json.
 func NewGlobal() (*Store, error) {

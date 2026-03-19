@@ -153,7 +153,9 @@ func (c *Connector) Fork(ctx context.Context, sourceSessionID string, checkpoint
 	return result.SessionID, nil
 }
 
-// TurnCount for OpenCode returns 0 with no error to allow checkpoints (degraded).
+func (c *Connector) SupportsFork() bool { return true }
+
+// TurnCount for OpenCode returns 0 to allow checkpoints (degraded).
 func (c *Connector) TurnCount(ctx context.Context, sessionID string) (int, error) {
 	return 0, nil
 }
