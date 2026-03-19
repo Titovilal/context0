@@ -39,6 +39,12 @@ var agentPromptCmd = &cobra.Command{
 
 		fmt.Printf("## MDM binary\n\n  %s\n\n## Working directory\n\n  %s\n\n", mdmBin, workDir)
 		fmt.Print(string(guideContent))
+
+		// Append project overview if available.
+		overviewPath := filepath.Join(workDir, ".mdm", "docs", "project_overview.md")
+		if overview, err := os.ReadFile(overviewPath); err == nil {
+			fmt.Print("\n\n" + string(overview))
+		}
 		return nil
 	},
 }

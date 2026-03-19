@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
-	"github.com/Titovilal/middleman/agent"
 	"github.com/spf13/cobra"
 )
 
@@ -17,10 +15,10 @@ var syncDocsFlags struct {
 
 var syncDocsCmd = &cobra.Command{
 	Use:   "sync-docs",
-	Short: "Spawn an agent to create or update .mdm/docs/",
+	Short: "Create or update .mdm/docs/ (runs synchronously)",
 	Long: `Spawns a dedicated agent that reads the codebase and creates or updates
 the documentation in .mdm/docs/ following the guide in .mdm/guides/how_to_manage_docs.md
-and the templates in .mdm/templates/.`,
+and the templates in .mdm/templates/. Blocks until the agent finishes.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		connName := syncDocsFlags.connector
 		if connName == "" {
@@ -55,28 +53,31 @@ and the templates in .mdm/templates/.`,
 			return err
 		}
 
-		fmt.Printf("agent: %s\n", a.ID)
-		fmt.Printf("  connector: %s\n", a.ConnectorName)
-		fmt.Printf("  session:   %s\n", a.SessionID)
-
-		if taskRec != nil && taskRec.Status == agent.TaskPending {
-			exe, err := os.Executable()
-			if err != nil {
-				return fmt.Errorf("resolve executable: %w", err)
-			}
-			bgCmd := exec.Command(exe, "_run-task", a.ID, taskRec.TaskID)
-			bgCmd.Stdout = nil
-			bgCmd.Stderr = nil
-			bgCmd.Stdin = nil
-			if err := bgCmd.Start(); err != nil {
-				return fmt.Errorf("start background task: %w", err)
-			}
-			_ = bgCmd.Process.Release()
-			fmt.Printf("  task_id:   %s\n", taskRec.TaskID)
-			fmt.Printf("  status:    running in background\n")
-			fmt.Printf("\nCheck results with: mdm result sync-docs\n")
+		if taskRec == nil {
+			fmt.Println("sync-docs agent already exists with no new task")
+			return nil
 		}
 
+		fmt.Fprintf(os.Stderr, "Syncing docs with %s...\n", a.ConnectorName)
+
+		// Run synchronously — block until done.
+		if err := orch.RunTask(context.Background(), a.ID, taskRec.TaskID, 0); err != nil {
+			return fmt.Errorf("sync-docs failed: %w", err)
+		}
+
+		// Reload to get the completed task.
+		a, err = orch.Inspect(context.Background(), a.ID)
+		if err != nil {
+			return err
+		}
+		t := a.TaskByID(taskRec.TaskID)
+		if t != nil && t.Response != "" {
+			fmt.Println(t.Response)
+		}
+
+		// Clean up the agent.
+		_ = orch.Remove(context.Background(), a.ID)
+		fmt.Fprintf(os.Stderr, "Done.\n")
 		return nil
 	},
 }

@@ -82,13 +82,19 @@ Examples:
 			workDir, _ = os.Getwd()
 		}
 
-		// Build prompt: binary/workdir info + guide file.
+		// Build prompt: binary/workdir + guide + project overview.
 		guidePath := filepath.Join(workDir, ".mdm", "guides", "how_mdm_works.md")
 		guideContent, err := os.ReadFile(guidePath)
 		if err != nil {
 			return fmt.Errorf("could not read guide at %s: %w", guidePath, err)
 		}
 		prompt := fmt.Sprintf("## MDM binary\n\n  %s\n\n## Working directory\n\n  %s\n\n%s", mdmBin, workDir, string(guideContent))
+
+		// Append project overview if available.
+		overviewPath := filepath.Join(workDir, ".mdm", "docs", "project_overview.md")
+		if overview, err := os.ReadFile(overviewPath); err == nil {
+			prompt += "\n\n" + string(overview)
+		}
 
 		// Build the command.
 		cliArgs := spec.buildArgs(prompt)
