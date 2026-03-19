@@ -30,8 +30,8 @@ jobs:
             suffix: windows-amd64.exe
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
       - name: Build
@@ -39,7 +39,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: go build -ldflags="-s -w -X github.com/Titovilal/middleman/cmd.Version=${{ github.ref_name }}" -o mdm-${{ matrix.suffix }} .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: mdm-${{ matrix.suffix }}
           path: mdm-${{ matrix.suffix }}
@@ -48,10 +48,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
           merge-multiple: true
