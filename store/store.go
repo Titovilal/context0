@@ -46,7 +46,7 @@ func New(dir string, defaultsFS fs.FS) (*Store, error) {
 // into mdmDir if it doesn't already exist. The directory structure inside
 // defaults/ mirrors what should appear inside .mdm/ (e.g. defaults/templates/
 // → .mdm/templates/).
-func initDefaults(mdmDir string) {
+func initDefaults(mdmDir string, defaultsFS fs.FS) {
 	_ = fs.WalkDir(defaultsFS, "defaults", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || path == "defaults" {
 			return nil
@@ -70,7 +70,7 @@ func initDefaults(mdmDir string) {
 			return nil
 		}
 
-		data, readErr := defaultsFS.ReadFile(path)
+		data, readErr := fs.ReadFile(defaultsFS, path)
 		if readErr != nil {
 			return nil
 		}
@@ -80,12 +80,12 @@ func initDefaults(mdmDir string) {
 }
 
 // NewGlobal creates a Store in ~/.mdm/registry.json.
-func NewGlobal() (*Store, error) {
+func NewGlobal(defaultsFS fs.FS) (*Store, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-	return New(home)
+	return New(home, defaultsFS)
 }
 
 func (s *Store) Load() (*agent.Registry, error) {

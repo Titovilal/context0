@@ -65,9 +65,9 @@ The Middleman manages agent lifecycle, context, checkpoints, and rewinds.`,
 		var s *store.Store
 		var err error
 		if cfg.GlobalMode {
-			s, err = store.NewGlobal()
+			s, err = store.NewGlobal(defaultsFS)
 		} else {
-			s, err = store.New(cfg.WorkDir)
+			s, err = store.New(cfg.WorkDir, defaultsFS)
 		}
 		if err != nil {
 			return fmt.Errorf("init store: %w", err)
