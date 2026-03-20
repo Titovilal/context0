@@ -27,8 +27,7 @@ var launchSpecs = map[string]launchSpec{
 		buildArgs: func(promptFile string) []string {
 			return []string{
 				"--dangerously-skip-permissions",
-				"--append-system-prompt-file", promptFile,
-				"You are now the Middleman.",
+				"You are now the Middleman. Read the following file and act accordingly: @" + promptFile,
 			}
 		},
 	},
