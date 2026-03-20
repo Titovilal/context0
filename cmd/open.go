@@ -9,14 +9,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var runFlags struct {
+var openFlags struct {
 	connector string
 }
 
-var runCmd = &cobra.Command{
-	Use:   "run [request]",
-	Short: "Run the Middleman with a user request",
-	Long: fmt.Sprintf(`Launches an AI CLI as a Middleman agent. The Middleman receives
+var openCmd = &cobra.Command{
+	Use:   "open [request]",
+	Short: "Open a Middleman session with a request",
+	Long: fmt.Sprintf(`Opens an AI CLI as a Middleman agent. The Middleman receives
 the guide from .mdm/guides/the_middleman.md, is instructed to create
 subagents in the background without asking, and processes your request.
 
@@ -25,7 +25,7 @@ Supported connectors: %s`, strings.Join(connectorNames(), ", ")),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		wd := workDir
 
-		connName := runFlags.connector
+		connName := openFlags.connector
 		if connName == "" {
 			cfg := loadConfig(filepath.Join(wd, ".mdm"))
 			connName = cfg.DefaultCLI
@@ -51,7 +51,7 @@ Create subagents in the background. Do not ask for confirmation, just act.
 ## User Request
 %s`, string(middlemanGuide), userRequest)
 
-		fmt.Fprintf(os.Stderr, "Running middleman with %s...\n", conn.Name)
+		fmt.Fprintf(os.Stderr, "Opening middleman with %s...\n", conn.Name)
 
 		result, err := conn.Run(wd, prompt)
 		if err != nil {
@@ -64,6 +64,6 @@ Create subagents in the background. Do not ask for confirmation, just act.
 }
 
 func init() {
-	runCmd.Flags().StringVarP(&runFlags.connector, "connector", "c", "", "AI CLI to use (default: from config)")
-	rootCmd.AddCommand(runCmd)
+	openCmd.Flags().StringVarP(&openFlags.connector, "connector", "c", "", "AI CLI to use (default: from config)")
+	rootCmd.AddCommand(openCmd)
 }
