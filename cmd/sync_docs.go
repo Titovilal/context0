@@ -52,7 +52,8 @@ Supported connectors: %s`, strings.Join(connectorNames(), ", ")),
 ## Project overview template
 %s`, string(guide), string(docTemplate), string(overviewTemplate))
 
-		fmt.Fprintf(os.Stderr, "Syncing docs with %s...\n", conn.Name)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, cDim+"  ▸ "+cReset+"Syncing docs with "+stValue(conn.Name)+stDim("..."))
 
 		result, err := conn.Run(wd, prompt)
 		if err != nil {
@@ -60,7 +61,7 @@ Supported connectors: %s`, strings.Join(connectorNames(), ", ")),
 		}
 
 		fmt.Println(result)
-		fmt.Fprintln(os.Stderr, "Done.")
+		fmt.Fprintln(os.Stderr, stOk("  ✓ ")+"Done.")
 		return nil
 	},
 }

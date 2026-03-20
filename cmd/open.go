@@ -51,7 +51,8 @@ Create subagents in the background. Do not ask for confirmation, just act.
 ## User Request
 %s`, string(middlemanGuide), userRequest)
 
-		fmt.Fprintf(os.Stderr, "Opening middleman with %s...\n", conn.Name)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, cDim+"  ▸ "+cReset+"Opening middleman with "+stValue(conn.Name)+stDim("..."))
 
 		result, err := conn.Run(wd, prompt)
 		if err != nil {

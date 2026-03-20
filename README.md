@@ -1,35 +1,26 @@
-# MDM - The Middleman
+# MDM — The Middleman
 
-A CLI tool for orchestrating multiple AI agent instances (Claude Code, Gemini CLI, OpenCode, Codex) from a single manager.
+One agent to rule them all.
+
+A CLI that turns any AI coding assistant into a Middleman — an orchestrator that delegates work to subagents without writing code itself.
 
 ## The problem
 
-When working on complex projects with AI coding assistants, you end up with several open instances:
-- Each one has a different context (files read, decisions made, errors seen)
-- You have to mentally track "this Claude knows about the auth module", "this one has the refactor context"
-- You manually rewind sessions when a recent change contaminates an instance's context
-- You decide yourself which instance to send each question to
-
-MDM externalizes that cognitive load.
+When working on complex projects with AI coding assistants, you end up managing multiple instances manually. MDM externalizes that cognitive load: you talk to one agent, and it decides how to split the work across subagents.
 
 ## How it works
 
-The **Middleman** is an orchestrator. It manages AI coding agents but doesn't write code itself — agents do that. The Middleman can run project commands (build, test, git, etc.) to verify work and gather information.
+MDM initializes a `.mdm/` directory in your project with guides, templates, and documentation. When you run `mdm open`, it launches your chosen AI CLI as a Middleman agent, injecting the orchestration guide so it knows how to behave: delegate in parallel, don't write code, return control immediately.
 
-Each agent is a subprocess running a real AI CLI. The Middleman only sees the **final response** — never the internal stream of tool calls, file reads, or intermediate reasoning. Each agent is a black box: task in, response out. When an agent's context gets contaminated, the Middleman rewinds it to a clean checkpoint — this is a deliberate strategy, not an error recovery mechanism.
+## Supported CLIs
 
-## Connectors
-
-MDM uses a pluggable connector interface. Each connector wraps a different AI CLI:
-
-| Connector | Status |
-|---|---|
-| `claude` | Tested (Claude Code CLI) |
-| `gemini` | Vibe-coded, untested (Gemini CLI) |
-| `codex` | Vibe-coded, untested (Codex CLI) |
-| `opencode` | Vibe-coded, untested (OpenCode CLI) |
-
-Only the Claude connector has been verified. The rest are implemented but waiting for feedback or usage — expect rough edges. Adding a new connector only requires implementing the `AgentConnector` interface in `connector/<name>/`.
+| CLI | Instruction file | Status |
+|---|---|---|
+| Claude Code | `CLAUDE.md` + `AGENTS.md` | Tested |
+| Codex | `AGENTS.md` | Untested |
+| Copilot | `AGENTS.md` | Untested |
+| Gemini CLI | `GEMINI.md` + `AGENTS.md` | Untested |
+| OpenCode | `AGENTS.md` | Untested |
 
 ## Installation
 
@@ -52,88 +43,75 @@ go install github.com/Titovilal/middleman@latest
 mv $(go env GOPATH)/bin/middleman $(go env GOPATH)/bin/mdm
 ```
 
-## Usage
-
-### Launch the Middleman
+## Quick start
 
 ```bash
-mdm launch claude    # or gemini, codex
+# Initialize .mdm/ in your project — asks which CLIs to integrate
+mdm init
+
+# Generate project documentation
+mdm sync-docs
+
+# Open a Middleman session with a request
+mdm open "refactor the auth module and add tests"
 ```
 
-### Spawn an agent and delegate a task
+## Commands
 
-```bash
-mdm spawn auth --briefing "Auth module" "Implement OAuth2 flow"
-mdm spawn tests --briefing "Payment tests" --connector gemini "Write tests for payments/"
-mdm spawn auth "Add refresh token support"  # agent exists → task is queued
+| Command | Description |
+|---|---|
+| `mdm init` | Initialize `.mdm/` and copy instruction files to project root |
+| `mdm sync-docs` | Generate/update `.mdm/docs/` using an AI CLI |
+| `mdm open [request]` | Open a Middleman session with a user request |
+| `mdm update` | Self-update to the latest version |
+| `mdm version` | Print current version |
+
+### `mdm init` flags
+
+| Flag | Description |
+|---|---|
+| `--force`, `-f` | Overwrite existing files without asking |
+| `--clis` | Comma-separated CLIs to integrate (e.g. `claude,gemini`) |
+| `--default` | Default CLI for sync-docs and open |
+| `--sync` | Run sync-docs after init |
+
+### `mdm open` / `mdm sync-docs` flags
+
+| Flag | Description |
+|---|---|
+| `--connector`, `-c` | AI CLI to use (overrides default from config) |
+
+## Project structure
+
 ```
-
-Spawn creates the agent and runs the task in the background. If the agent already exists, the task is queued into it.
-
-### Check results
-
-```bash
-mdm result auth                  # latest task
-mdm result auth --task-id <id>   # specific task
-```
-
-### Check agent status
-
-```bash
-mdm status
-mdm status --all
-```
-
-### Rewind to a checkpoint
-
-```bash
-mdm rewind auth --list                        # show checkpoints
-mdm rewind auth                               # rewind to latest
-mdm rewind auth --to pre-task-20260318-110000  # rewind to specific
-```
-
-Rewinds fork the session — the original is never deleted.
-
-### Remove an agent
-
-```bash
-mdm remove auth
-```
-
-## Documentation system
-
-Each project has `.mdm/` with:
-- **`guides/how_agents_should_behave.md`** — mandatory steps for all agents (auto-injected into every briefing)
-- **`docs/`** — project documentation that agents read before modifying code
-- **`guides/`** — process guides (e.g. `the_middleman.md` — the Middleman's playbook)
-- **`templates/`** — templates for creating docs
-
-`mdm sync-docs` generates skeleton docs automatically by scanning source files.
-
-## Registry
-
-The agent registry is stored in `.mdm/registry.json` in the project directory. Use `--global` to use `~/.mdm/` instead.
-
-```bash
-mdm --global status
-mdm --workdir /path/to/project status
+your-project/
+├── AGENTS.md              — subagent behavior (always created)
+├── CLAUDE.md              — Claude-specific instructions (if selected)
+├── GEMINI.md              — Gemini-specific instructions (if selected)
+└── .mdm/
+    ├── config.json        — default CLI and settings
+    ├── guides/
+    │   ├── the_middleman.md    — how the Middleman operates
+    │   └── how_to_sync_docs.md — guide for doc generation
+    ├── templates/         — templates for generating docs
+    └── docs/              — generated project documentation
 ```
 
 ## Architecture
 
 ```
 mdm/
-├── main.go
-├── cmd/           # CLI commands (cobra)
-├── agent/         # Agent, Checkpoint, TaskRecord types and in-memory registry
-├── connector/     # AgentConnector interface + per-CLI implementations
-│   ├── claude/
-│   ├── gemini/
-│   ├── codex/
-│   └── opencode/
-├── orchestrator/  # Business logic: Spawn, Rewind, Remove, ListAgents
-├── store/         # JSON persistence with atomic writes
-└── config/        # Runtime config, paths
+├── main.go          # Entry point, embeds defaults/
+├── cmd/
+│   ├── root.go      # CLI setup, init command, banner
+│   ├── open.go      # mdm open — launch Middleman session
+│   ├── sync_docs.go # mdm sync-docs — doc generation
+│   ├── connector.go # AI CLI connectors (claude, codex, gemini, copilot, opencode)
+│   └── update.go    # Self-update
+└── defaults/        # Embedded files copied on mdm init
+    ├── AGENTS.md
+    ├── CLAUDE.md
+    ├── GEMINI.md
+    ├── guides/
+    └── templates/
 ```
-
-The `orchestrator` package has no CLI or I/O concerns — it only depends on the `connector` interface and the `store`. This makes it independently testable with a mock connector.

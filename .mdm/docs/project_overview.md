@@ -1,24 +1,25 @@
 # Project Overview
 
 ## What It Does
-MDM (The Middleman) is a CLI tool that orchestrates multiple AI coding agents (Claude Code, Gemini, OpenCode, Codex) from a single manager. It externalizes context management and task delegation so a "Middleman" agent can spawn, delegate to, rewind, and monitor multiple AI agents working in parallel on the same codebase.
+MDM (The Middleman) is a CLI tool that manages project documentation and orchestrates AI coding agents. It initializes a `.mdm/` directory in any project, uses AI CLIs (Claude, Gemini, Codex, Copilot, OpenCode) to generate and maintain documentation, and can launch a "Middleman" agent session that delegates work to subagents.
 
 ## Main Files
-- `main.go` - Entry point, calls cmd.Execute()
-- `agent/` - Domain types (Agent, TaskRecord, CheckpointRecord) and in-memory registry
-- `config/` - Runtime configuration and path resolution
-- `connector/` - Pluggable interface for AI CLIs with four implementations (Claude, Gemini, OpenCode, Codex)
-- `orchestrator/` - Business logic for spawn (with inline delegation), rewind, remove, and agent listing
-- `store/` - JSON file persistence with atomic writes
-- `cmd/` - CLI commands via Cobra (spawn, result, status, rewind, remove, launch, update, sync-docs)
+- `main.go` - Entry point; embeds the `defaults/` directory and calls `cmd.Execute()`
+- `cmd/root.go` - Root command, `mdm init` (scaffolds `.mdm/`, CLI wizard, config), banner, global flags
+- `cmd/connector.go` - AI CLI connector abstraction with five implementations (Claude, Copilot, Gemini, Codex, OpenCode)
+- `cmd/sync_docs.go` - `mdm sync-docs` generates/updates docs by prompting an AI CLI with guides and templates
+- `cmd/open.go` - `mdm open` launches a Middleman agent session through an AI CLI
+- `cmd/update.go` - `mdm update` self-updates from GitHub releases; `mdm version` prints version
+- `defaults/` - Embedded default files (guides, templates, agent instructions) copied during init
+- `.github/workflows/release.yml` - CI/CD: cross-platform builds and GitHub releases on tag push
 
 ## Flow
-1. User (or a Middleman agent) runs `mdm spawn <name> --briefing '...' 'task'` to create an agent and delegate a task in one call; if the agent already exists, the task is queued
-2. Tasks run asynchronously in background processes; results are retrieved with `mdm result`
-3. Sessions can be rewound to any checkpoint via `mdm rewind`, which forks the AI CLI session at the checkpoint's native reference point (note: only Claude supports true session forking; Gemini and OpenCode have degraded rewind with limitations)
+1. User runs `mdm init` to scaffold `.mdm/` with guides, templates, config, and agent instruction files
+2. User runs `mdm sync-docs` to generate project documentation — an AI CLI reads the codebase and writes docs into `.mdm/docs/`
+3. User runs `mdm open <request>` to start a Middleman session that delegates work to AI subagents
 
 ## Documentation available in `.mdm/docs/`
-- **`agent_registry.md`** — Agent domain types and in-memory registry
-- **`config_connector_orchestrator.md`** — Configuration, connector interface, all four AI CLI connectors, and orchestrator business logic
-- **`cli_commands.md`** — All CLI commands (spawn, result, status, rewind, remove, launch, update, sync-docs)
-- **`store_persistence.md`** — JSON file persistence, atomic writes, and .mdm/ directory initialization
+- **`cli_commands.md`** — All CLI commands (init, sync-docs, open, update, version) and the Cobra command structure
+- **`connectors.md`** — AI CLI connector abstraction and the five implementations
+- **`init_and_defaults.md`** — The init command, embedded defaults, config, and CLI selection wizard
+- **`release_and_install.md`** — GitHub Actions release workflow, install scripts, and self-update mechanism

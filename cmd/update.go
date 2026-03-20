@@ -26,7 +26,7 @@ var updateCmd = &cobra.Command{
 	Short:       "Update mdm to the latest version",
 	Annotations: map[string]string{"skip_init": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("Current version: %s\n", Version)
+		stStep("Current version: " + stValue(Version))
 
 		resp, err := http.Get("https://api.github.com/repos/Titovilal/middleman/releases/latest")
 		if err != nil {
@@ -46,11 +46,11 @@ var updateCmd = &cobra.Command{
 		latest := strings.TrimPrefix(release.TagName, "v")
 		current := strings.TrimPrefix(Version, "v")
 		if latest == current {
-			fmt.Println("Already up to date.")
+			stDone("Already up to date.")
 			return nil
 		}
 
-		fmt.Printf("New version available: %s\n", latest)
+		stStep("New version available: " + stOk(latest))
 
 		goos := runtime.GOOS
 		goarch := runtime.GOARCH
@@ -62,14 +62,14 @@ var updateCmd = &cobra.Command{
 
 		// Determine install target early so we can download next to it.
 		installPath, migrated := resolveInstallPath()
-		fmt.Printf("Installing to %s...\n", installPath)
+		stStep("Installing to " + stValue(installPath) + "...")
 
 		if err := os.MkdirAll(filepath.Dir(installPath), 0o755); err != nil {
 			return fmt.Errorf("create install dir: %w", err)
 		}
 
 		// Download using net/http (no dependency on curl).
-		fmt.Printf("Downloading %s...\n", latest)
+		stStep("Downloading " + stValue(latest) + "...")
 		// Download to the same directory as the install target so os.Rename
 		// never crosses a volume boundary (common cause of "Access is denied"
 		// on Windows when %TEMP% is on a different drive).
@@ -102,13 +102,14 @@ var updateCmd = &cobra.Command{
 		}
 
 		if migrated {
-			fmt.Printf("Migrated from system directory to %s.\n", installPath)
+			stStep("Migrated from system directory to " + stValue(installPath))
 			if goos == "windows" {
-				fmt.Println("Restart your terminal for PATH changes to take effect.")
+				stStep(stWarn("Restart your terminal") + " for PATH changes to take effect.")
 			}
 		}
 
-		fmt.Printf("Updated to %s.\n", latest)
+		fmt.Println()
+		stDone("Updated to " + stOk(latest))
 		return nil
 	},
 }
@@ -270,7 +271,7 @@ var versionCmd = &cobra.Command{
 	Short:       "Print the current version",
 	Annotations: map[string]string{"skip_init": "true"},
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(strings.TrimPrefix(Version, "v"))
+		fmt.Println(stDim("mdm ") + stOk(strings.TrimPrefix(Version, "v")))
 	},
 }
 

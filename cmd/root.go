@@ -51,7 +51,7 @@ var rootCmd = &cobra.Command{
 }
 
 var initFlags struct {
-	force      bool
+	mode       string // overwrite | fresh | keep
 	clis       string // comma-separated CLI names, e.g. "claude,gemini"
 	defaultCLI string // default CLI name
 	syncDocs   bool   // run sync-docs after init
@@ -82,19 +82,37 @@ var initCmd = &cobra.Command{
 			workDir = wd
 		}
 
-		force := initFlags.force
-
-		// --- .mdm/ directory ---
+		// --- resolve init mode ---
 		mdmDir := filepath.Join(workDir, ".mdm")
-		if !force {
-			if _, err := os.Stat(mdmDir); !os.IsNotExist(err) {
-				if !confirmOverwrite(".mdm/") {
-					fmt.Println("Skipped .mdm/")
-				} else {
-					force = true
+		_, existsErr := os.Stat(mdmDir)
+		alreadyExists := !os.IsNotExist(existsErr)
+
+		mode := strings.ToLower(initFlags.mode)
+		if mode != "" && mode != "overwrite" && mode != "fresh" && mode != "keep" {
+			return fmt.Errorf("invalid --mode %q (use: overwrite, fresh, or keep)", mode)
+		}
+		if alreadyExists && mode == "" {
+			mode = selectInitMode()
+		}
+
+		switch mode {
+		case "fresh":
+			stStep("Removing existing " + stValue(".mdm/") + " ...")
+			if err := os.RemoveAll(mdmDir); err != nil {
+				return fmt.Errorf("remove .mdm dir: %w", err)
+			}
+			for _, cli := range cliIntegrations {
+				if cli.ExtraFile != "" {
+					os.Remove(filepath.Join(workDir, cli.ExtraFile))
 				}
 			}
+			os.Remove(filepath.Join(workDir, "AGENTS.md"))
+		case "keep":
+			stSkip(".mdm/ — keeping existing files")
+			return nil
 		}
+
+		force := mode == "overwrite" || mode == "fresh"
 
 		if err := os.MkdirAll(mdmDir, 0o755); err != nil {
 			return fmt.Errorf("create .mdm dir: %w", err)
@@ -115,13 +133,13 @@ var initCmd = &cobra.Command{
 		}
 
 		// AGENTS.md always gets copied (all CLIs need it).
-		copyRootFile("AGENTS.md", initFlags.force)
+		copyRootFile("AGENTS.md", force)
 
 		// Copy extra files for selected CLIs.
 		copied := map[string]bool{}
 		for _, cli := range selected {
 			if cli.ExtraFile != "" && !copied[cli.ExtraFile] {
-				copyRootFile(cli.ExtraFile, initFlags.force)
+				copyRootFile(cli.ExtraFile, force)
 				copied[cli.ExtraFile] = true
 			}
 		}
@@ -137,9 +155,9 @@ var initCmd = &cobra.Command{
 		}
 		saveConfig(mdmDir, defaultCLI)
 
-		fmt.Println()
-		fmt.Println("Initialized .mdm/ in", workDir)
-		fmt.Printf("Default CLI: %s\n", defaultCLI)
+		stTitle("Initialized")
+		stDone(fmt.Sprintf(".mdm/ in %s", stValue(workDir)))
+		stDone(fmt.Sprintf("Default CLI: %s", stValue(defaultCLI)))
 
 		// --- Sync docs ---
 		runSync := initFlags.syncDocs
@@ -152,7 +170,8 @@ var initCmd = &cobra.Command{
 			return syncDocsCmd.RunE(syncDocsCmd, nil)
 		}
 
-		fmt.Println("Run 'mdm sync-docs' to generate documentation.")
+		fmt.Println()
+		stStep("Run " + stValue("mdm sync-docs") + " to generate documentation.")
 		return nil
 	},
 }
@@ -294,12 +313,39 @@ func copyRootFile(name string, force bool) {
 	}
 	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
 		if !force && !confirmOverwrite(name) {
-			fmt.Printf("Skipped %s\n", name)
+			stSkip(name)
 			return
 		}
 	}
 	_ = os.WriteFile(target, data, 0o644)
-	fmt.Printf("Created %s\n", name)
+	stDone(fmt.Sprintf("Created %s", stValue(name)))
+}
+
+// selectInitMode asks the user how to handle an existing .mdm/ directory.
+// Returns "overwrite", "fresh", or "skip".
+func selectInitMode() string {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println()
+	fmt.Println(stHeader("  .mdm/ already exists"))
+	fmt.Println()
+	fmt.Println(stDim("  1.") + " " + stValue("Overwrite") + stDim("  — merge defaults, ask per file"))
+	fmt.Println(stDim("  2.") + " " + stValue("Fresh start") + stDim(" — delete .mdm/ and recreate from scratch"))
+	fmt.Println(stDim("  3.") + " " + stValue("Skip") + stDim("        — keep everything as-is"))
+	fmt.Println()
+	fmt.Print(stDim("  Choose [1]: "))
+
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	switch input {
+	case "2":
+		return "fresh"
+	case "3":
+		return "skip"
+	default:
+		return "overwrite"
+	}
 }
 
 func confirmOverwrite(name string) bool {
@@ -358,7 +404,7 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&workDir, "workdir", "w", "", "project directory (default: current dir)")
-	initCmd.Flags().BoolVarP(&initFlags.force, "force", "f", false, "overwrite existing files without asking")
+	initCmd.Flags().StringVarP(&initFlags.mode, "mode", "m", "", "init mode: overwrite, fresh, or keep")
 	initCmd.Flags().StringVar(&initFlags.clis, "clis", "", "comma-separated CLIs to integrate (e.g. claude,gemini,codex)")
 	initCmd.Flags().StringVar(&initFlags.defaultCLI, "default", "", "default CLI for sync-docs")
 	initCmd.Flags().BoolVar(&initFlags.syncDocs, "sync", false, "run sync-docs after init")
@@ -366,47 +412,36 @@ func init() {
 }
 
 func printBanner() {
-	const (
-		reset  = "\033[0m"
-		bold   = "\033[1m"
-		dim    = "\033[2m"
-		blue   = "\033[34m"
-		white  = "\033[97m"
-		green  = "\033[32m"
-		red    = "\033[38;5;167m"
-		yellow = "\033[38;5;220m"
-	)
-
 	fmt.Println()
-	fmt.Println(red + bold + "  ███╗   ███╗██████╗ ███╗   ███╗" + reset)
-	fmt.Println(red + bold + "  ████╗ ████║██╔══██╗████╗ ████║" + reset)
-	fmt.Println(yellow + bold + "  ██╔████╔██║██║  ██║██╔████╔██║" + reset)
-	fmt.Println(yellow + bold + "  ██║╚██╔╝██║██║  ██║██║╚██╔╝██║" + reset)
-	fmt.Println(red + bold + "  ██║ ╚═╝ ██║██████╔╝██║ ╚═╝ ██║" + reset)
-	fmt.Println(red + bold + "  ╚═╝     ╚═╝╚═════╝ ╚═╝     ╚═╝" + reset)
+	fmt.Println(cRed + cBold + "  ███╗   ███╗██████╗ ███╗   ███╗" + cReset)
+	fmt.Println(cRed + cBold + "  ████╗ ████║██╔══██╗████╗ ████║" + cReset)
+	fmt.Println(cYellow + cBold + "  ██╔████╔██║██║  ██║██╔████╔██║" + cReset)
+	fmt.Println(cYellow + cBold + "  ██║╚██╔╝██║██║  ██║██║╚██╔╝██║" + cReset)
+	fmt.Println(cRed + cBold + "  ██║ ╚═╝ ██║██████╔╝██║ ╚═╝ ██║" + cReset)
+	fmt.Println(cRed + cBold + "  ╚═╝     ╚═╝╚═════╝ ╚═╝     ╚═╝" + cReset)
 	fmt.Println()
-	fmt.Println(white + bold + "  The Middleman" + reset + dim + " — One agent to rule them all" + reset)
+	fmt.Println(stHeader("  The Middleman") + stDim(" — One agent to rule them all"))
 	fmt.Println()
-	fmt.Printf(dim+"  version "+reset+green+"%s"+reset+dim+"  go "+reset+green+"%s"+reset+dim+"  %s/%s"+reset+"\n",
+	fmt.Printf(cDim+"  version "+cReset+cGreen+"%s"+cReset+cDim+"  go "+cReset+cGreen+"%s"+cReset+cDim+"  %s/%s"+cReset+"\n",
 		Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	fmt.Println()
-	fmt.Println(white + bold + "  Structure:" + reset)
-	fmt.Println(dim + "     .mdm/" + reset)
-	fmt.Println(dim + "     ├── guides/      " + reset + dim + "instructions for how MDM operates" + reset)
-	fmt.Println(dim + "     ├── templates/   " + reset + dim + "templates for generating docs" + reset)
-	fmt.Println(dim + "     └── docs/        " + reset + dim + "generated project documentation" + reset)
+	fmt.Println(stHeader("  Structure:"))
+	fmt.Println(stDim("     .mdm/"))
+	fmt.Println(stDim("     ├── guides/      instructions for how MDM operates"))
+	fmt.Println(stDim("     ├── templates/   templates for generating docs"))
+	fmt.Println(stDim("     └── docs/        generated project documentation"))
 	fmt.Println()
-	fmt.Println(white + bold + "  Commands:" + reset)
-	fmt.Println(dim + "     $ " + reset + white + "mdm init" + reset + dim + "          initialize .mdm/ in your project" + reset)
-	fmt.Println(dim + "     $ " + reset + white + "mdm sync-docs" + reset + dim + "     generate/update documentation" + reset)
-	fmt.Println(dim + "     $ " + reset + white + "mdm update" + reset + dim + "        self-update to the latest version" + reset)
-	fmt.Println(dim + "     $ " + reset + white + "mdm version" + reset + dim + "       print current version" + reset)
+	fmt.Println(stHeader("  Commands:"))
+	fmt.Println(stDim("     $ ") + stValue("mdm init") + stDim("          initialize .mdm/ in your project"))
+	fmt.Println(stDim("     $ ") + stValue("mdm sync-docs") + stDim("     generate/update documentation"))
+	fmt.Println(stDim("     $ ") + stValue("mdm update") + stDim("        self-update to the latest version"))
+	fmt.Println(stDim("     $ ") + stValue("mdm version") + stDim("       print current version"))
 	fmt.Println()
-	fmt.Println(white + bold + "  Quick start:" + reset)
-	fmt.Println(dim + "     1. " + reset + white + "mdm init" + reset + dim + "          in your project root" + reset)
-	fmt.Println(dim + "     2. " + reset + white + "mdm sync-docs" + reset + dim + "     to generate documentation" + reset)
-	fmt.Println(dim + "     3. docs appear in " + reset + white + ".mdm/docs/" + reset)
+	fmt.Println(stHeader("  Quick start:"))
+	fmt.Println(stDim("     1. ") + stValue("mdm init") + stDim("          in your project root"))
+	fmt.Println(stDim("     2. ") + stValue("mdm sync-docs") + stDim("     to generate documentation"))
+	fmt.Println(stDim("     3. docs appear in ") + stValue(".mdm/docs/"))
 	fmt.Println()
-	fmt.Println(dim + "  Docs: " + reset + blue + "https://github.com/Titovilal/middleman" + reset)
+	fmt.Println(stDim("  Docs: ") + cBlue + "https://github.com/Titovilal/middleman" + cReset)
 	fmt.Println()
 }
