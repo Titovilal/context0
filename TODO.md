@@ -1,0 +1,1 @@
+- el claude hace lo que le da la gana, no piensa que el es el middleman, 
