@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -15,27 +15,33 @@ var syncDocsFlags struct {
 
 var syncDocsCmd = &cobra.Command{
 	Use:   "sync-docs",
-	Short: "Create or update .mdm/docs/ (runs synchronously)",
-	Long: `Spawns a dedicated agent that reads the codebase and creates or updates
-the documentation in .mdm/docs/ following the guide in .mdm/guides/how_to_manage_docs.md
-and the templates in .mdm/templates/. Blocks until the agent finishes.`,
+	Short: "Create or update .mdm/docs/ using an AI CLI",
+	Long: fmt.Sprintf(`Reads the codebase and creates or updates the documentation in .mdm/docs/
+following the guide in .mdm/guides/how_to_sync_docs.md and the templates
+in .mdm/templates/. Blocks until finished.
+
+Supported connectors: %s`, strings.Join(connectorNames(), ", ")),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		wd := workDir
+
 		connName := syncDocsFlags.connector
 		if connName == "" {
-			connName = cfg.DefaultConnector
+			cfg := loadConfig(filepath.Join(wd, ".mdm"))
+			connName = cfg.DefaultCLI
+		}
+		conn, ok := connectors[connName]
+		if !ok {
+			return fmt.Errorf("unknown connector %q (available: %s)", connName, strings.Join(connectorNames(), ", "))
 		}
 
-		wd := cfg.WorkDir
-
-		// Read the guide and templates to build the task prompt.
-		guide, err := os.ReadFile(filepath.Join(wd, ".mdm", "guides", "how_to_manage_docs.md"))
+		guide, err := os.ReadFile(filepath.Join(wd, ".mdm", "guides", "how_to_sync_docs.md"))
 		if err != nil {
-			return fmt.Errorf("read how_to_manage_docs.md: %w (run any mdm command first to initialize .mdm/)", err)
+			return fmt.Errorf("read how_to_sync_docs.md: %w (run 'mdm init' first)", err)
 		}
 		docTemplate, _ := os.ReadFile(filepath.Join(wd, ".mdm", "templates", "doc_template.md"))
 		overviewTemplate, _ := os.ReadFile(filepath.Join(wd, ".mdm", "templates", "project_overview_template.md"))
 
-		task := fmt.Sprintf(`Follow these instructions to create or update the project documentation.
+		prompt := fmt.Sprintf(`You are a documentation agent. Your only job is to read the codebase and create/update .mdm/docs/ following the guide and templates provided.
 
 ## Guide
 %s
@@ -46,43 +52,28 @@ and the templates in .mdm/templates/. Blocks until the agent finishes.`,
 ## Project overview template
 %s`, string(guide), string(docTemplate), string(overviewTemplate))
 
-		briefing := "You are a documentation agent. Your only job is to read the codebase and create/update .mdm/docs/ following the guide and templates provided."
+		fmt.Fprintf(os.Stderr, "Syncing docs with %s...\n", conn.Name)
 
-		a, taskRec, err := orch.Spawn(context.Background(), "sync-docs", briefing, connName, task, 0)
+		result, err := conn.Run(wd, prompt)
 		if err != nil {
 			return err
 		}
 
-		if taskRec == nil {
-			fmt.Println("sync-docs agent already exists with no new task")
-			return nil
-		}
-
-		fmt.Fprintf(os.Stderr, "Syncing docs with %s...\n", a.ConnectorName)
-
-		// Run synchronously — block until done.
-		if err := orch.RunTask(context.Background(), a.ID, taskRec.TaskID, 0); err != nil {
-			return fmt.Errorf("sync-docs failed: %w", err)
-		}
-
-		// Reload to get the completed task.
-		a, err = orch.Inspect(context.Background(), a.ID)
-		if err != nil {
-			return err
-		}
-		t := a.TaskByID(taskRec.TaskID)
-		if t != nil && t.Response != "" {
-			fmt.Println(t.Response)
-		}
-
-		// Clean up the agent.
-		_ = orch.Remove(context.Background(), a.ID)
-		fmt.Fprintf(os.Stderr, "Done.\n")
+		fmt.Println(result)
+		fmt.Fprintln(os.Stderr, "Done.")
 		return nil
 	},
 }
 
+func connectorNames() []string {
+	names := make([]string, 0, len(connectors))
+	for k := range connectors {
+		names = append(names, k)
+	}
+	return names
+}
+
 func init() {
-	syncDocsCmd.Flags().StringVar(&syncDocsFlags.connector, "connector", "", "connector to use (overrides default)")
+	syncDocsCmd.Flags().StringVarP(&syncDocsFlags.connector, "connector", "c", "", "AI CLI to use (default: claude)")
 	rootCmd.AddCommand(syncDocsCmd)
 }

@@ -105,7 +105,7 @@ mdm remove auth
 Each project has `.mdm/` with:
 - **`guides/how_agents_should_behave.md`** — mandatory steps for all agents (auto-injected into every briefing)
 - **`docs/`** — project documentation that agents read before modifying code
-- **`guides/`** — process guides (e.g. `how_mdm_works.md` — the Middleman's playbook)
+- **`guides/`** — process guides (e.g. `the_middleman.md` — the Middleman's playbook)
 - **`templates/`** — templates for creating docs
 
 `mdm sync-docs` generates skeleton docs automatically by scanning source files.
