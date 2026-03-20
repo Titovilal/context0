@@ -385,7 +385,7 @@ func printBanner() {
 	fmt.Println(red + bold + "  ██║ ╚═╝ ██║██████╔╝██║ ╚═╝ ██║" + reset)
 	fmt.Println(red + bold + "  ╚═╝     ╚═╝╚═════╝ ╚═╝     ╚═╝" + reset)
 	fmt.Println()
-	fmt.Println(white + bold + "  The Middleman" + reset + dim + " — AI documentation manager" + reset)
+	fmt.Println(white + bold + "  The Middleman" + reset + dim + " — One agent to rule them all" + reset)
 	fmt.Println()
 	fmt.Printf(dim+"  version "+reset+green+"%s"+reset+dim+"  go "+reset+green+"%s"+reset+dim+"  %s/%s"+reset+"\n",
 		Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
