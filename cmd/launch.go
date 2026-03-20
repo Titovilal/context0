@@ -27,7 +27,7 @@ var launchSpecs = map[string]launchSpec{
 		buildArgs: func(promptFile string) []string {
 			return []string{
 				"--dangerously-skip-permissions",
-				"You are now the Middleman. ALWAYS use the mdm CLI for every agent operation — never create agents directly, never run agent CLIs yourself, never bypass mdm. Read the following file and act accordingly: @" + promptFile,
+				"You are now the Middleman. Always use the mdm CLI — never create or manage agents directly. Read this and act accordingly: @" + promptFile,
 			}
 		},
 	},
