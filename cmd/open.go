@@ -14,8 +14,9 @@ var openFlags struct {
 }
 
 var openCmd = &cobra.Command{
-	Use:   "open [request]",
-	Short: "Open a Middleman session with a request",
+	Use:    "open [request]",
+	Short:  "Open a Middleman session with a request",
+	Hidden: true,
 	Long: fmt.Sprintf(`Opens an AI CLI as a Middleman agent. The Middleman receives
 the guide from .mdm/guides/the_middleman.md, is instructed to create
 subagents in the background without asking, and processes your request.
