@@ -24,12 +24,23 @@ var connectors = map[string]connector{
 }
 
 // runSync launches a CLI command and captures its stdout output.
+//
+// stderr is buffered rather than forwarded to the terminal: some CLIs (notably
+// `codex exec`) stream their live progress/reasoning to stderr, which would
+// otherwise flood the user's screen during a sync. We only surface stderr when
+// the command fails, so the error message still carries the diagnostics.
 func runSync(workDir string, name string, args ...string) (string, error) {
 	c := exec.Command(name, args...)
 	c.Dir = workDir
-	c.Stderr = os.Stderr
+
+	var stderr bytes.Buffer
+	c.Stderr = &stderr
+
 	out, err := c.Output()
 	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("%s failed: %w\n%s", name, err, stderr.String())
+		}
 		return "", fmt.Errorf("%s failed: %w", name, err)
 	}
 	return string(out), nil
