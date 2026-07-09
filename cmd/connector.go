@@ -83,8 +83,9 @@ func runGemini(workDir, prompt string) (string, error) {
 func runCodex(workDir, prompt string) (string, error) {
 	// The current Codex CLI (Rust rewrite) runs non-interactively via the
 	// `exec` subcommand. The old `--approval-mode full-auto --quiet` flags were
-	// removed; `--full-auto` is the equivalent low-friction sandbox mode.
-	return runSync(workDir, "codex", "exec", "--full-auto", prompt)
+	// removed. `--full-auto` still works but is deprecated for exec, so use the
+	// explicit modern flags: workspace-write sandbox with no approval prompts.
+	return runSync(workDir, "codex", "exec", "--sandbox", "workspace-write", "--ask-for-approval", "never", prompt)
 }
 
 // --- OpenCode ---
