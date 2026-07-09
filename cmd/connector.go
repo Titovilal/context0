@@ -24,11 +24,6 @@ var connectors = map[string]connector{
 }
 
 // runSync launches a CLI command and captures its stdout output.
-//
-// stderr is buffered rather than forwarded to the terminal: some CLIs (notably
-// `codex exec`) stream their live progress/reasoning to stderr, which would
-// otherwise flood the user's screen during a sync. We only surface stderr when
-// the command fails, so the error message still carries the diagnostics.
 func runSync(workDir string, name string, args ...string) (string, error) {
 	c := exec.Command(name, args...)
 	c.Dir = workDir
