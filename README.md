@@ -92,6 +92,6 @@ your-project/
 | ----------- | ------------------------- | -------- |
 | Claude Code | `CLAUDE.md` + `AGENTS.md` | Tested   |
 | Codex       | `AGENTS.md`               | Tested   |
-| Copilot     | `AGENTS.md`               | Tested   |
+| Copilot     | `AGENTS.md`               | Untested |
 | Gemini CLI  | `GEMINI.md` + `AGENTS.md` | Untested |
-| OpenCode    | `AGENTS.md`               | Tested   |
+| OpenCode    | `AGENTS.md`               | Untested |
