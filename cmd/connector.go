@@ -81,11 +81,6 @@ func runGemini(workDir, prompt string) (string, error) {
 // --- Codex ---
 
 func runCodex(workDir, prompt string) (string, error) {
-	// The current Codex CLI (Rust rewrite) runs non-interactively via the
-	// `exec` subcommand. `--sandbox` and `--ask-for-approval` are GLOBAL flags
-	// that must precede the subcommand — `codex exec --ask-for-approval` is
-	// rejected as an unexpected argument. So the order is:
-	//   codex --ask-for-approval never --sandbox workspace-write exec <prompt>
 	return runSync(workDir, "codex", "--ask-for-approval", "never", "--sandbox", "workspace-write", "exec", prompt)
 }
 
